@@ -269,11 +269,23 @@ function getRandomStartIndex(batchSize) {
 
 async function fetchInitialGroup(apiClient, parentId) {
     const fetchSize = CONFIG.limit * 2;
+
+    // Preflight: tiny query to learn TotalRecordCount so we can pick a random window
+    if (STATE.totalRecordCount == null) {
+        try {
+            const preflightQ = buildQuery(parentId, { limit: 1, enableTotal: true });
+            const preflight = await apiClient.getItems(apiClient.getCurrentUserId(), preflightQ);
+            if (preflight && typeof preflight.TotalRecordCount === 'number') {
+                STATE.totalRecordCount = preflight.TotalRecordCount;
+                console.log(`[Spotlight] Preflight total unplayed items: ${STATE.totalRecordCount}`);
+            }
+        } catch (e) { console.warn("[Spotlight] Preflight count query failed", e); }
+    }
+
     const startIndex = getRandomStartIndex(fetchSize);
-    const q = buildQuery(parentId, { limit: fetchSize, startIndex, enableTotal: true });
+    const q = buildQuery(parentId, { limit: fetchSize, startIndex, enableTotal: false });
     console.log(`[Spotlight] Initial fetch: startIndex=${startIndex}, limit=${fetchSize}`);
     const result = await apiClient.getItems(apiClient.getCurrentUserId(), q);
-    if (result && typeof result.TotalRecordCount === 'number') { STATE.totalRecordCount = result.TotalRecordCount; console.log(`[Spotlight] Total unplayed items: ${STATE.totalRecordCount}`); }
     const allItems = (result && result.Items) || [];
     console.log(`[Spotlight] Initial fetch returned ${allItems.length} items`);
     if (allItems.length <= CONFIG.limit) return allItems;
