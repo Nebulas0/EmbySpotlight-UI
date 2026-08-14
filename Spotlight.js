@@ -29,12 +29,24 @@ const CONFIG = {
     libraryId: null,
     enablePreloading: true,
     enableSwipe: true,
-    swipeThreshold: 50
+    swipeThreshold: 50,
+    spotlightBatchSize: 250,
+    autoAdvanceOnCycle: true,
+    unplayedOnly: true
 };
 
 let SPOTLIGHT_INITIALIZED = false;
 let SPOTLIGHT_INSTANCE = null;
 const SPOTLIGHT_CONTAINER_CLASS = 'emby-spotlight-slider-container';
+
+const STATE = {
+    itemPool: [],
+    poolCursor: 0,
+    totalRecordCount: null,
+    usedStartIndices: new Set(),
+    isFetchingBatch: false,
+    apiClient: null
+};
 
 const homeContainerSelectors = [
     ".view:not(.hide) .homeSectionsContainer",
@@ -176,8 +188,12 @@ function insertStyles() {
     document.head.appendChild(s);
 }
 
-function buildQuery(apiClient, parentId) {
-    const q = { IncludeItemTypes:"Movie,Series", Recursive:true, Limit:CONFIG.limit, SortBy:"Random", SortOrder:"Descending", EnableImageTypes:"Primary,Backdrop,Thumb,Logo,Banner", EnableUserData:true, EnableTotalRecordCount:false, Fields:"PrimaryImageAspectRatio,BackdropImageTags,ImageTags,ParentLogoImageTag,ParentLogoItemId,CriticRating,CommunityRating,OfficialRating,PremiereDate,ProductionYear,Genres,RunTimeTicks,Taglines,Overview" };
+function buildQuery(parentId, options) {
+    options = options || {};
+    const q = { IncludeItemTypes:"Movie,Series", Recursive:true, SortBy:"ProductionYear,SortName", SortOrder:"Descending", EnableImageTypes:"Primary,Backdrop,Thumb,Logo,Banner", EnableUserData:true, EnableTotalRecordCount:options.enableTotal !== false, Fields:"PrimaryImageAspectRatio,BackdropImageTags,ImageTags,ParentLogoImageTag,ParentLogoItemId,CriticRating,CommunityRating,OfficialRating,PremiereDate,ProductionYear,Genres,RunTimeTicks,Taglines,Overview" };
+    if (CONFIG.unplayedOnly) q.IsPlayed = false;
+    q.Limit = options.limit != null ? options.limit : CONFIG.limit;
+    if (options.startIndex != null) q.StartIndex = options.startIndex;
     if (parentId) { q.ParentId = parentId; console.log("[Spotlight] Loading from parentId:", parentId); }
     return q;
 }
@@ -239,17 +255,70 @@ async function fetchItems(apiClient) {
     return fetchStandardItems(apiClient);
 }
 
-async function fetchStandardItems(apiClient) {
-    const parentId = CONFIG.collectionId || CONFIG.libraryId || null;
-    const q = buildQuery(apiClient, parentId);
+function getRandomStartIndex(batchSize) {
+    const total = STATE.totalRecordCount;
+    if (!total || total <= batchSize) return 0;
+    const maxStart = total - batchSize;
+    const possible = [];
+    for (let s = 0; s <= maxStart; s += batchSize) { if (!STATE.usedStartIndices.has(s)) possible.push(s); }
+    if (possible.length === 0) { STATE.usedStartIndices.clear(); for (let s = 0; s <= maxStart; s += batchSize) possible.push(s); }
+    const chosen = possible[Math.floor(Math.random() * possible.length)];
+    STATE.usedStartIndices.add(chosen);
+    return chosen;
+}
+
+async function fetchInitialGroup(apiClient, parentId) {
+    const fetchSize = CONFIG.limit * 2;
+    const startIndex = getRandomStartIndex(fetchSize);
+    const q = buildQuery(parentId, { limit: fetchSize, startIndex, enableTotal: true });
+    console.log(`[Spotlight] Initial fetch: startIndex=${startIndex}, limit=${fetchSize}`);
+    const result = await apiClient.getItems(apiClient.getCurrentUserId(), q);
+    if (result && typeof result.TotalRecordCount === 'number') { STATE.totalRecordCount = result.TotalRecordCount; console.log(`[Spotlight] Total unplayed items: ${STATE.totalRecordCount}`); }
+    const allItems = (result && result.Items) || [];
+    console.log(`[Spotlight] Initial fetch returned ${allItems.length} items`);
+    if (allItems.length <= CONFIG.limit) return allItems;
+    const display = allItems.slice(0, CONFIG.limit);
+    STATE.itemPool.push(...allItems.slice(CONFIG.limit));
+    STATE.poolCursor = 0;
+    return display;
+}
+
+async function fetchBatch(apiClient, parentId) {
+    if (STATE.isFetchingBatch) return;
+    STATE.isFetchingBatch = true;
     try {
-        q.Limit = 500;
-        const items = await apiClient.getItems(apiClient.getCurrentUserId(), q);
-        const allItems = items.Items || [];
-        console.log(`[Spotlight] Fetched ${allItems.length} items, selecting ${CONFIG.limit} randomly`);
-        if (allItems.length <= CONFIG.limit) return allItems;
-        return shuffleArray(allItems).slice(0, CONFIG.limit);
-    } catch (e) { console.warn("[Spotlight] Error fetching items", e); return []; }
+        const batchSize = CONFIG.spotlightBatchSize;
+        const startIndex = getRandomStartIndex(batchSize);
+        const q = buildQuery(parentId, { limit: batchSize, startIndex, enableTotal: false });
+        console.log(`[Spotlight] Background batch: startIndex=${startIndex}, limit=${batchSize}`);
+        const result = await apiClient.getItems(apiClient.getCurrentUserId(), q);
+        const items = (result && result.Items) || [];
+        const existingIds = new Set(STATE.itemPool.map(i => i.Id));
+        const newItems = items.filter(i => !existingIds.has(i.Id));
+        STATE.itemPool.push(...newItems);
+        console.log(`[Spotlight] Pool size after batch: ${STATE.itemPool.length} (+${newItems.length} new)`);
+    } catch (e) { console.warn("[Spotlight] Background batch fetch failed", e); }
+    finally { STATE.isFetchingBatch = false; }
+}
+
+function getNextGroupFromPool() {
+    const remaining = STATE.itemPool.length - STATE.poolCursor;
+    if (remaining < CONFIG.limit && !STATE.isFetchingBatch && STATE.apiClient) { const pid = CONFIG.collectionId || CONFIG.libraryId || null; fetchBatch(STATE.apiClient, pid); }
+    if (remaining <= 0) { console.log("[Spotlight] Pool exhausted, no new group yet"); return null; }
+    const group = STATE.itemPool.slice(STATE.poolCursor, STATE.poolCursor + CONFIG.limit);
+    STATE.poolCursor += group.length;
+    console.log(`[Spotlight] Pulled ${group.length} from pool (cursor ${STATE.poolCursor})`);
+    return group;
+}
+
+async function fetchStandardItems(apiClient) {
+    STATE.apiClient = apiClient;
+    const parentId = CONFIG.collectionId || CONFIG.libraryId || null;
+    try {
+        const displayItems = await fetchInitialGroup(apiClient, parentId);
+        fetchBatch(apiClient, parentId);
+        return displayItems;
+    } catch (e) { console.warn("[Spotlight] Error fetching initial items", e); return []; }
 }
 
 function createInfoElement(item) {
@@ -344,8 +413,11 @@ function navigateToItem(itemId, serverId, apiClient) {
 }
 
 function attachSliderBehavior(state, apiClient) {
-    const { slider, itemsCount, btnLeft, btnRight, controls, spotlight, favoriteButtonOverlay } = state;
+    const { slider, btnLeft, btnRight, controls, spotlight, favoriteButtonOverlay } = state;
+    let itemsCount = state.itemsCount;
     let currentIndex = 1;
+    let cyclesCompleted = 0;
+    let isSwapping = false;
     let touchStartX=0, touchStartY=0, touchEndX=0, touchEndY=0, isSwiping=false, swipeStartTime=0;
 
     function triggerZoomAnimation() {
@@ -372,6 +444,22 @@ function attachSliderBehavior(state, apiClient) {
             if(o)o.classList.remove('visible'); if(l)l.classList.remove('hidden'); if(t)t.classList.remove('hidden'); if(tg)tg.classList.remove('hidden');
         });
     }
+    function swapGroup(newItems) {
+        if (!newItems || newItems.length === 0) { console.log("[Spotlight] No new items to swap"); return; }
+        isSwapping = true;
+        while (slider.firstChild) slider.removeChild(slider.firstChild);
+        const frag = document.createDocumentFragment();
+        newItems.forEach(it => frag.appendChild(createBannerElement(it, apiClient)));
+        slider.appendChild(frag);
+        if (newItems.length > 1) { const f=slider.children[0].cloneNode(true); const l=slider.children[slider.children.length-1].cloneNode(true); slider.appendChild(f); slider.insertBefore(l, slider.children[0]); }
+        while (controls.firstChild) controls.removeChild(controls.firstChild);
+        newItems.forEach((_, i) => { const c=document.createElement("button"); c.className="control"; if(i===0)c.classList.add("active"); c.dataset.index=i+1; c.setAttribute("aria-label",`Slide ${i+1}`); controls.appendChild(c); });
+        itemsCount = newItems.length; state.itemsCount = itemsCount; currentIndex = 1;
+        updateTransform(currentIndex, false); setActiveDot(currentIndex); updateFavoriteButton(); triggerZoomAnimation();
+        isSwapping = false;
+        console.log(`[Spotlight] Swapped to new group of ${newItems.length} items (cycle ${cyclesCompleted})`);
+    }
+    state.swapGroup = swapGroup;
     const resizeHandler = () => { updateTransform(currentIndex, false); void slider.offsetHeight; };
     window.addEventListener("resize", resizeHandler);
     setTimeout(() => { updateTransform(currentIndex, false); setActiveDot(currentIndex); triggerZoomAnimation(); updateFavoriteButton(); }, 50);
@@ -384,7 +472,10 @@ function attachSliderBehavior(state, apiClient) {
         resetOverviews(); updateTransform(currentIndex,true); setActiveDot(currentIndex); updateFavoriteButton(); setTimeout(()=>triggerZoomAnimation(),100);
         setTimeout(() => {
             if (currentIndex === 0) { currentIndex = itemsCount; updateTransform(currentIndex,false); setActiveDot(currentIndex); updateFavoriteButton(); setTimeout(()=>triggerZoomAnimation(),100); }
-            else if (currentIndex === itemsCount+1) { currentIndex = 1; updateTransform(currentIndex,false); setActiveDot(currentIndex); updateFavoriteButton(); setTimeout(()=>triggerZoomAnimation(),100); }
+            else if (currentIndex === itemsCount+1) {
+                currentIndex = 1; updateTransform(currentIndex,false); setActiveDot(currentIndex); updateFavoriteButton(); setTimeout(()=>triggerZoomAnimation(),100);
+                if (CONFIG.autoAdvanceOnCycle && !isSwapping) { cyclesCompleted++; console.log(`[Spotlight] Cycle ${cyclesCompleted} complete — loading next group`); if (typeof state.onCycleComplete === 'function') state.onCycleComplete(); }
+            }
         }, 520);
     }
 
@@ -463,7 +554,21 @@ async function init() {
         if (reference?.parentNode) reference.parentNode.insertBefore(container, reference);
         else home.insertBefore(container, home.firstChild);
         const loader = container.querySelector(".loader"); if (loader) loader.style.display = "none";
-        attachSliderBehavior({ slider, itemsCount: items.length, btnLeft, btnRight, controls, spotlight, favoriteButtonOverlay }, apiClient);
+        const sliderState = { slider, itemsCount: items.length, btnLeft, btnRight, controls, spotlight, favoriteButtonOverlay };
+        sliderState.onCycleComplete = async function() {
+            const nextGroup = getNextGroupFromPool();
+            if (nextGroup && nextGroup.length > 0) {
+                if (CONFIG.enablePreloading) {
+                    await Promise.all(nextGroup.map(item => new Promise(resolve => {
+                        const img = new Image(); const to = setTimeout(resolve, 2000);
+                        img.onload = () => { clearTimeout(to); resolve(); }; img.onerror = () => { clearTimeout(to); resolve(); };
+                        img.src = getImageUrl(apiClient, item, { width: CONFIG.preloadWidth, prefer: "Backdrop" });
+                    })));
+                }
+                if (typeof sliderState.swapGroup === 'function') sliderState.swapGroup(nextGroup);
+            } else { console.log("[Spotlight] No next group available yet — will retry on next cycle"); }
+        };
+        attachSliderBehavior(sliderState, apiClient);
         SPOTLIGHT_INSTANCE = { container, cleanup: null };
         console.log(`[Spotlight] Slider initialized in ${Math.round(performance.now()-initStart)}ms with ${items.length} items`);
     } catch (err) { console.error("[Spotlight] init error", err); SPOTLIGHT_INITIALIZED = false; }
@@ -473,6 +578,7 @@ function cleanup() {
     if (SPOTLIGHT_INSTANCE?.cleanup) SPOTLIGHT_INSTANCE.cleanup();
     if (SPOTLIGHT_INSTANCE?.container) SPOTLIGHT_INSTANCE.container.remove();
     SPOTLIGHT_INSTANCE = null; SPOTLIGHT_INITIALIZED = false;
+    STATE.itemPool = []; STATE.poolCursor = 0; STATE.totalRecordCount = null; STATE.usedStartIndices.clear(); STATE.isFetchingBatch = false;
 }
 
 function observeViewAndInit() {
