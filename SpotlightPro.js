@@ -93,6 +93,20 @@ function safeRequire(modules) {
     });
 }
 
+function getServerId(apiClient) {
+    try {
+        if (typeof apiClient.serverId === 'function') return apiClient.serverId();
+        if (typeof apiClient.serverId === 'string') return apiClient.serverId;
+        if (typeof apiClient.serverInfo === 'function') {
+            const info = apiClient.serverInfo();
+            return info?.Id || null;
+        }
+        if (apiClient.serverInfo?.Id) return apiClient.serverInfo.Id;
+        if (apiClient._serverInfo?.Id) return apiClient._serverInfo.Id;
+    } catch (e) { /* ignore */ }
+    return null;
+}
+
 function hexToRgb(hex) {
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
     return result ? {
@@ -416,7 +430,7 @@ async function fetchStandardItems(apiClient) {
 
 async function navigateToGenre(genre, apiClient) {
     try {
-        const sid = apiClient.serverId || apiClient.serverInfo?.Id || apiClient._serverInfo?.Id;
+        const sid = getServerId(apiClient);
         const parentId = CONFIG.collectionId || CONFIG.libraryId || '';
         const userId = apiClient.getCurrentUserId();
         const token = apiClient.accessToken ? apiClient.accessToken() : null;
@@ -591,7 +605,7 @@ function buildSlider(items, apiClient) {
 
 function playItem(itemId, serverId, apiClient) {
     let sid = serverId;
-    if (!sid && apiClient) sid = apiClient.serverId || apiClient.serverInfo?.Id || apiClient._serverInfo?.Id;
+    if (!sid && apiClient) sid = getServerId(apiClient);
     if (window.require) { try { window.require(['playbackManager'], function(pm) { if (pm?.play) pm.play({ ids: [itemId], serverId: sid }); }); return; } catch (e) {} }
     if (window.appRouter?.showItem) { window.appRouter.showItem(itemId, sid); setTimeout(() => { const pb = document.querySelector('.btnPlay'); if (pb) pb.click(); }, 500); }
 }
