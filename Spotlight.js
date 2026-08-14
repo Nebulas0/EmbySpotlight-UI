@@ -67,7 +67,7 @@ if (typeof GM_xmlhttpRequest === 'undefined') {
 
 		// How many items to fetch per API batch (fetched once, displayed in
 		// groups of `limit`). Larger = more variety before re-fetching.
-		spotlightBatchSize: 100,
+		spotlightBatchSize: 250,
 
 		// When the user cycles through all slides, automatically load the
 		// next group from the batch instead of wrapping around.
@@ -1449,8 +1449,9 @@ if (typeof GM_xmlhttpRequest === 'undefined') {
         return {
             IncludeItemTypes: "Movie,Series",
             Recursive: true,
-            Limit: CONFIG.spotlightBatchSize || 100,
-            SortBy: "ProductionYear,SortName",
+            Limit: CONFIG.spotlightBatchSize || 250,
+            IsPlayed: false,
+            SortBy: "ProductionYear,CommunityRating",
             SortOrder: "Descending",
             EnableImageTypes: "Primary,Backdrop,Thumb,Logo,Banner",
             EnableUserData: false,
@@ -1474,6 +1475,7 @@ if (typeof GM_xmlhttpRequest === 'undefined') {
                 IncludeItemTypes: "Movie,Series",
                 Recursive: true,
                 Limit: 0,
+                IsPlayed: false,
                 EnableTotalRecordCount: true,
                 EnableImageData: false,
                 Fields: ""
@@ -1493,7 +1495,10 @@ if (typeof GM_xmlhttpRequest === 'undefined') {
                 Recursive: true,
                 Limit: batchSize,
                 StartIndex: startIndex,
-                SortBy: "ProductionYear,SortName",
+                IsPlayed: false,
+                // Sort by release year (newest first), then by community rating
+                // (highest first) within the same year. Both use DB indexes = fast.
+                SortBy: "ProductionYear,CommunityRating",
                 SortOrder: "Descending",
                 EnableImageTypes: "Primary,Backdrop,Thumb,Logo,Banner",
                 EnableUserData: false,
