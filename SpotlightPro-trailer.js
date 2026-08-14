@@ -270,7 +270,7 @@ function insertStyles() {
     .spotlight .trailer-controls{top:.5rem !important;right:.5rem !important;left:auto !important;bottom:auto !important;gap:.4rem !important}
     .spotlight.trailer-playing .trailer-controls{opacity:1 !important;pointer-events:auto !important}
     .spotlight.trailer-playing .arrow{opacity:.4 !important;pointer-events:auto !important}
-    .spotlight .trailer-seek-bar{opacity:1 !important;bottom:3rem !important}
+    .spotlight.trailer-playing .trailer-seek-bar{opacity:1 !important;bottom:4rem !important;height:8px !important}
     .spotlight .trailer-control-btn{width:36px !important;height:36px !important}
     .spotlight .trailer-control-btn svg{width:18px !important;height:18px !important}
     .spotlight .progress-bar-container{height:2px !important}
@@ -293,8 +293,8 @@ function insertStyles() {
 .spotlight .trailer-control-btn{width:48px;height:48px;border-radius:50%;background:rgba(0,0,0,.6);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s ease;color:#fff}
 .spotlight .trailer-control-btn:hover{background:rgba(0,0,0,.8);transform:scale(1.05)}
 .spotlight .trailer-control-btn svg{width:24px;height:24px;fill:#fff}
-.spotlight .trailer-seek-bar{position:absolute;bottom:4rem;left:0;width:100%;height:6px;background:rgba(255,255,255,.2);z-index:31;cursor:pointer;opacity:0;transition:opacity .3s ease}
-.spotlight.trailer-playing:hover .trailer-seek-bar{opacity:1}
+.spotlight .trailer-seek-bar{position:absolute;bottom:4rem;left:0;width:100%;height:8px;background:rgba(255,255,255,.2);z-index:31;cursor:pointer;opacity:0;transition:opacity .3s ease}
+.spotlight.trailer-playing .trailer-seek-bar{opacity:1}
 .spotlight .trailer-seek-fill{height:100%;width:0%;background:#ff0000;transition:width .1s linear}
 .spotlight .trailer-seek-bar:hover .trailer-seek-fill{background:#ff3333}
 .spotlight .trailer-controls .trailer-control-btn:hover{background:rgba(255,255,255,.2)}
