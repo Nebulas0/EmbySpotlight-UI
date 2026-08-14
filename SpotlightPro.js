@@ -42,7 +42,7 @@ const CONFIG = {
     enableKeyboard: true,
     enableCrossfade: true,
     crossfadeDuration: 400,
-    enablePlayText: true,
+    enablePlayText: false,
     enableGenreClick: true
 };
 
@@ -147,8 +147,6 @@ function insertStyles() {
 .spotlight .play-button:hover{transform:scale(1.02);background:${CONFIG.playbuttonColor};box-shadow:0 6px 20px rgba(0,0,0,.5)}
 .spotlight .play-button svg{width:40px;height:40px;fill:#fff;margin-left:6px;position:relative;left:-2px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3));transition:filter .3s ease}
 .spotlight .play-button:hover svg{filter:drop-shadow(0 3px 6px rgba(0,0,0,.5))}
-.spotlight .play-button-text{font-size:1.3rem;font-weight:700;color:#fff;text-shadow:2px 2px 8px rgba(0,0,0,.9);max-width:0;overflow:hidden;white-space:nowrap;opacity:0;transition:max-width .3s ease .1s,opacity .3s ease .1s,margin-left .3s ease .1s}
-.spotlight-container:hover .play-button-text{max-width:100px;opacity:1;margin-left:.8rem}
 .spotlight .favorite-button-overlay{position:absolute;top:2rem;left:2rem;z-index:25;opacity:0;transition:opacity .3s ease;pointer-events:none}
 .spotlight-container:hover .favorite-button-overlay{opacity:1;pointer-events:all}
 .spotlight .favorite-button{width:80px;height:80px;border-radius:50%;background:rgba(55,55,55,.3);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.4)}
@@ -176,7 +174,8 @@ function insertStyles() {
 .spotlight .banner-gradient-right{position:absolute;top:0;bottom:0;right:0;width:35%;pointer-events:none;z-index:6;background:linear-gradient(to left,${rgbaColor} 0%,${rgbaColor} 3%,rgba(${rgb.r},${rgb.g},${rgb.b},.98) 6%,rgba(${rgb.r},${rgb.g},${rgb.b},.95) 10%,rgba(${rgb.r},${rgb.g},${rgb.b},.92) 15%,rgba(${rgb.r},${rgb.g},${rgb.b},.87) 20%,rgba(${rgb.r},${rgb.g},${rgb.b},.8) 25%,rgba(${rgb.r},${rgb.g},${rgb.b},.7) 35%,rgba(${rgb.r},${rgb.g},${rgb.b},.55) 45%,rgba(${rgb.r},${rgb.g},${rgb.b},.4) 55%,rgba(${rgb.r},${rgb.g},${rgb.b},.25) 65%,rgba(${rgb.r},${rgb.g},${rgb.b},.15) 75%,rgba(${rgb.r},${rgb.g},${rgb.b},.08) 85%,rgba(${rgb.r},${rgb.g},${rgb.b},.03) 92%,transparent 100%)}
 .spotlight .banner-vignette-top{position:absolute;top:0;left:0;right:0;height:30%;background:linear-gradient(to bottom,rgba(${rgb.r},${rgb.g},${rgb.b},.85) 0%,rgba(${rgb.r},${rgb.g},${rgb.b},.6) 30%,rgba(${rgb.r},${rgb.g},${rgb.b},.3) 60%,transparent 100%);pointer-events:none;z-index:6}
 .spotlight .banner-vignette-bottom{position:absolute;bottom:0;left:0;right:0;height:30%;background:linear-gradient(to top,rgba(${rgb.r},${rgb.g},${rgb.b},.85) 0%,rgba(${rgb.r},${rgb.g},${rgb.b},.6) 30%,rgba(${rgb.r},${rgb.g},${rgb.b},.3) 60%,transparent 100%);pointer-events:none;z-index:6}
-.spotlight .banner-info-backdrop{position:absolute;left:0;bottom:0;width:100%;height:30%;z-index:9;pointer-events:none;background:rgba(${rgb.r},${rgb.g},${rgb.b},.25);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);mask-image:linear-gradient(to top,rgba(0,0,0,1) 0%,rgba(0,0,0,.7) 50%,transparent 100%);-webkit-mask-image:linear-gradient(to top,rgba(0,0,0,1) 0%,rgba(0,0,0,.7) 50%,transparent 100%)}
+.spotlight .banner-info-backdrop{position:absolute;left:0;top:0;width:100%;height:100%;z-index:8;pointer-events:none;background:rgba(${rgb.r},${rgb.g},${rgb.b},.15);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);opacity:0;transition:opacity .3s ease}
+.spotlight .banner-item:hover .banner-info-backdrop{opacity:1}
 .spotlight .banner-logo{position:absolute;left:50%;top:45%;transform:translate(-50%,-50%);max-width:60%;max-height:50%;object-fit:contain;z-index:15;filter:drop-shadow(0 6px 20px rgba(0,0,0,.95)) drop-shadow(0 0 40px rgba(0,0,0,.6));pointer-events:auto;cursor:pointer;transition:transform .5s ease,opacity .3s ease}
 .spotlight-container:hover .banner-logo{transform:translate(-50%,-50%) scale(1.1)}
 .spotlight .banner-logo.hidden{opacity:0;pointer-events:none}
@@ -331,11 +330,23 @@ function getRandomStartIndex(batchSize) {
 
 async function fetchInitialGroup(apiClient, parentId) {
     const fetchSize = CONFIG.limit * 2;
+    // Preflight: learn TotalRecordCount so we can pick a truly random window
+    if (STATE.totalRecordCount == null) {
+        try {
+            const preflightQ = buildQuery(parentId, { limit: 1, enableTotal: true });
+            const preflight = await apiClient.getItems(apiClient.getCurrentUserId(), preflightQ);
+            if (preflight?.TotalRecordCount != null) {
+                STATE.totalRecordCount = preflight.TotalRecordCount;
+                console.log(`[SpotlightPro] Preflight total unplayed items: ${STATE.totalRecordCount}`);
+            }
+        } catch (e) { console.warn('[SpotlightPro] Preflight count failed', e); }
+    }
     const startIndex = getRandomStartIndex(fetchSize);
-    const q = buildQuery(parentId, { limit: fetchSize, startIndex, enableTotal: true });
+    const q = buildQuery(parentId, { limit: fetchSize, startIndex, enableTotal: false });
+    console.log(`[SpotlightPro] Initial fetch: startIndex=${startIndex}, limit=${fetchSize}`);
     const result = await apiClient.getItems(apiClient.getCurrentUserId(), q);
-    if (result?.TotalRecordCount != null) STATE.totalRecordCount = result.TotalRecordCount;
     const allItems = result?.Items || [];
+    console.log(`[SpotlightPro] Initial fetch returned ${allItems.length} items`);
     if (allItems.length <= CONFIG.limit) return allItems;
     const display = allItems.slice(0, CONFIG.limit);
     STATE.itemPool.push(...allItems.slice(CONFIG.limit));
@@ -391,10 +402,14 @@ async function fetchStandardItems(apiClient) {
 function navigateToGenre(genre, apiClient) {
     try {
         const sid = apiClient.serverId || apiClient.serverInfo?.Id || apiClient._serverInfo?.Id;
-        if (window.appRouter?.show) { window.appRouter.show(`#!/itemlist.html?genres=${encodeURIComponent(genre)}${sid ? '&serverId=' + sid : ''}`); return; }
-        if (window.Dashboard?.navigate) { window.Dashboard.navigate(`#!/itemlist.html?genres=${encodeURIComponent(genre)}`); return; }
-        window.location.hash = `#!/itemlist.html?genres=${encodeURIComponent(genre)}`;
-    } catch (e) { /* ignore */ }
+        const parentId = CONFIG.collectionId || CONFIG.libraryId || '';
+        let url = '/web/index.html#!/itemlist.html?genres=' + encodeURIComponent(genre);
+        if (parentId) url += '&parentId=' + parentId;
+        if (sid) url += '&serverId=' + sid;
+        // Use full navigation — Emby's SPA router doesn't process hash changes
+        // for genre filters reliably, so we do a real page navigation
+        window.location.href = url;
+    } catch (e) { console.warn('[SpotlightPro] Genre navigation failed:', e); }
 }
 
 function pickKenBurnsClass() {
@@ -435,7 +450,7 @@ function createBannerElement(item, apiClient) {
     const div = document.createElement("div");
     div.className = "banner-item";
     const img = document.createElement("img");
-    img.className = "banner-cover";
+    img.className = "banner-cover " + pickKenBurnsClass();
     img.draggable = false; img.alt = item.Name || ""; img.loading = "eager"; img.decoding = "async";
     img.src = getImageUrl(apiClient, item, { width: CONFIG.imageWidth, prefer: "Backdrop" });
     div.appendChild(img);
@@ -490,7 +505,6 @@ function buildSlider(items, apiClient) {
     playButton.className = "play-button"; playButton.setAttribute("aria-label", "Play");
     playButton.innerHTML = `<svg viewBox="0 0 24 24"><path d="M8,5.14V19.14L19,12.14L8,5.14Z"/></svg>`;
     playButtonOverlay.appendChild(playButton);
-    if (CONFIG.enablePlayText) { const pt = document.createElement("span"); pt.className = "play-button-text"; pt.textContent = "Play"; playButtonOverlay.appendChild(pt); }
     spotlight.appendChild(playButtonOverlay);
     const favoriteButtonOverlay = document.createElement("div");
     favoriteButtonOverlay.className = "favorite-button-overlay";
