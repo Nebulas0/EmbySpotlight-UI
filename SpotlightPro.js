@@ -612,7 +612,7 @@ function playItem(itemId, serverId, apiClient) {
 
 function navigateToItem(itemId, serverId, apiClient) {
     let sid = serverId;
-    if (!sid && apiClient) sid = apiClient.serverId || apiClient.serverInfo?.Id || apiClient._serverInfo?.Id;
+    if (!sid && apiClient) sid = getServerId(apiClient);
     if (!sid) { try { sid = new URLSearchParams(window.location.search).get("serverId"); } catch (e) {} }
     if (!sid && window.localStorage) { try { sid = window.localStorage.getItem("serverId"); } catch (e) {} }
     if (window.appRouter?.showItem) { window.appRouter.showItem(itemId, sid); return; }
@@ -689,21 +689,19 @@ function attachSliderBehavior(state, apiClient) {
     function swapGroup(newItems) {
         if (!newItems?.length) return;
         isSwapping = true;
-        const doSwap = () => {
-            while (slider.firstChild) slider.removeChild(slider.firstChild);
-            const frag = document.createDocumentFragment();
-            newItems.forEach(it => frag.appendChild(createBannerElement(it, apiClient)));
-            slider.appendChild(frag);
-            if (newItems.length > 1) { const f = slider.children[0].cloneNode(true); const l = slider.children[slider.children.length - 1].cloneNode(true); slider.appendChild(f); slider.insertBefore(l, slider.children[0]); }
-            while (controls.firstChild) controls.removeChild(controls.firstChild);
-            newItems.forEach((_, i) => { const c = document.createElement("button"); c.className = "control"; if (i === 0) c.classList.add("active"); c.dataset.index = i + 1; c.setAttribute("aria-label", `Slide ${i+1}`); controls.appendChild(c); });
-            itemsCount = newItems.length; state.itemsCount = itemsCount; currentIndex = 1;
-            updateTransform(currentIndex, false); setActiveDot(currentIndex); updateFavoriteButton(); updateSlideCounter(); triggerKenBurns();
-        };
-        if (CONFIG.enableCrossfade) {
-            container.classList.add('fade-out');
-            setTimeout(() => { doSwap(); container.classList.remove('fade-out'); container.classList.add('fade-in'); setTimeout(() => container.classList.remove('fade-in'), CONFIG.crossfadeDuration); isSwapping = false; startProgress(); }, CONFIG.crossfadeDuration);
-        } else { doSwap(); isSwapping = false; startProgress(); }
+        // Instant swap — no crossfade. The old content is already off-screen
+        // (we intercepted the wrap), so we just replace and show new slide 1.
+        while (slider.firstChild) slider.removeChild(slider.firstChild);
+        const frag = document.createDocumentFragment();
+        newItems.forEach(it => frag.appendChild(createBannerElement(it, apiClient)));
+        slider.appendChild(frag);
+        if (newItems.length > 1) { const f = slider.children[0].cloneNode(true); const l = slider.children[slider.children.length - 1].cloneNode(true); slider.appendChild(f); slider.insertBefore(l, slider.children[0]); }
+        while (controls.firstChild) controls.removeChild(controls.firstChild);
+        newItems.forEach((_, i) => { const c = document.createElement("button"); c.className = "control"; if (i === 0) c.classList.add("active"); c.dataset.index = i + 1; c.setAttribute("aria-label", `Slide ${i+1}`); controls.appendChild(c); });
+        itemsCount = newItems.length; state.itemsCount = itemsCount; currentIndex = 1;
+        updateTransform(currentIndex, false); setActiveDot(currentIndex); updateFavoriteButton(); updateSlideCounter(); triggerKenBurns();
+        isSwapping = false;
+        startProgress();
     }
     state.swapGroup = swapGroup;
 
@@ -716,15 +714,46 @@ function attachSliderBehavior(state, apiClient) {
     controls.addEventListener("click", (e) => { e.stopPropagation(); if (e.target.classList.contains("control")) { resetOverviews(); currentIndex = parseInt(e.target.dataset.index, 10); updateTransform(currentIndex, true); setActiveDot(currentIndex); updateFavoriteButton(); updateSlideCounter(); setTimeout(() => { triggerKenBurns(); startProgress(); }, 100); } });
 
     function animate() {
+        // Check if we're about to wrap forward past the last slide
+        if (CONFIG.autoAdvanceOnCycle && !isSwapping && currentIndex === itemsCount + 1) {
+            // Forward wrap — DON'T show old slide 1. Swap to new batch instead.
+            if (STATE.nextGroupReady) {
+                // Preloaded — swap immediately, no old content shown
+                cyclesCompleted++;
+                if (typeof state.onCycleComplete === 'function') state.onCycleComplete();
+            } else {
+                // Not preloaded — snap back to last slide and wait for preload
+                currentIndex = itemsCount;
+                updateTransform(currentIndex, false);
+                setActiveDot(currentIndex);
+                updateFavoriteButton();
+                updateSlideCounter();
+                setTimeout(() => { triggerKenBurns(); startProgress(); }, 100);
+                // Trigger preload and swap when ready
+                if (typeof state.preloadNext === 'function') {
+                    state.preloadNext().then(() => {
+                        if (STATE.nextGroupReady && !isSwapping) {
+                            cyclesCompleted++;
+                            if (typeof state.onCycleComplete === 'function') state.onCycleComplete();
+                        }
+                    });
+                }
+            }
+            return;
+        }
+
+        // Normal slide navigation
         resetOverviews(); updateTransform(currentIndex, true); setActiveDot(currentIndex); updateFavoriteButton(); updateSlideCounter();
         setTimeout(() => { triggerKenBurns(); startProgress(); }, 100);
+
+        // Preload next group when 2 slides before cycle end
         if (CONFIG.autoAdvanceOnCycle && !isSwapping && !STATE.nextGroupReady && currentIndex === itemsCount - 1 && typeof state.preloadNext === 'function') state.preloadNext();
+
+        // Backward wrap (slide 0 → last slide) — no swap needed
         setTimeout(() => {
-            if (currentIndex === 0) { currentIndex = itemsCount; updateTransform(currentIndex, false); setActiveDot(currentIndex); updateFavoriteButton(); updateSlideCounter(); setTimeout(() => { triggerKenBurns(); startProgress(); }, 100); }
-            else if (currentIndex === itemsCount + 1) {
-                currentIndex = 1; updateTransform(currentIndex, false); setActiveDot(currentIndex); updateFavoriteButton(); updateSlideCounter();
+            if (currentIndex === 0) {
+                currentIndex = itemsCount; updateTransform(currentIndex, false); setActiveDot(currentIndex); updateFavoriteButton(); updateSlideCounter();
                 setTimeout(() => { triggerKenBurns(); startProgress(); }, 100);
-                if (CONFIG.autoAdvanceOnCycle && !isSwapping) { cyclesCompleted++; if (typeof state.onCycleComplete === 'function') state.onCycleComplete(); }
             }
         }, 520);
     }
