@@ -754,6 +754,7 @@ function attachSliderBehavior(state, apiClient) {
     let touchStartX = 0, touchStartY = 0, touchEndX = 0, touchEndY = 0, isSwiping = false, swipeStartTime = 0;
     let autoplayTimer = null, progressTimer = null, isAutoplayPaused = false;
     let trailerActive = false, trailerIframe = null, trailerMuted = true;
+    let trailerScaleFn = null;
     function onYouTubeMessage(e) { try { if (typeof e.data !== 'string') return; const data = JSON.parse(e.data); if (data.event === 'initialDelivery' && data.info) { trailerIframe?.contentWindow.postMessage(JSON.stringify({ event: 'listening' }), '*'); return; } if (data.event === 'infoDelivery' && data.info) { if (data.info.playerState === 0) stopTrailer(); } } catch (err) {} }
 
     function startProgress() {
@@ -800,6 +801,7 @@ function attachSliderBehavior(state, apiClient) {
         spotlight.classList.remove('trailer-playing');
         trailerActive = false; trailerMuted = true;
         window.removeEventListener('message', onYouTubeMessage);
+        if (trailerScaleFn) { window.removeEventListener('resize', trailerScaleFn); trailerScaleFn = null; }
         // Remove scale listener
         const oldScale = trailerIframe?.style.transform;
         const ub = state.trailerControls?.querySelector('.unmute-btn');
@@ -819,7 +821,7 @@ function attachSliderBehavior(state, apiClient) {
         stopProgress();
         vi.classList.add('show-trailer');
         spotlight.classList.add('trailer-playing');
-        const params = new URLSearchParams({ autoplay: '1', mute: CONFIG.trailerStartMuted ? '1' : '0', controls: '1', modestbranding: '1', rel: '0', playsinline: '1', enablejsapi: '1' });
+        const params = new URLSearchParams({ autoplay: '1', mute: CONFIG.trailerStartMuted ? '1' : '0', controls: '0', modestbranding: '1', rel: '0', playsinline: '1', enablejsapi: '1', iv_load_policy: '3', fs: '0' });
         trailerIframe = document.createElement('iframe');
         trailerIframe.className = 'trailer-iframe';
         trailerIframe.src = `https://www.youtube.com/embed/${trailerId}?${params.toString()}`;
@@ -830,7 +832,29 @@ function attachSliderBehavior(state, apiClient) {
         trailerActive = true;
         window.addEventListener('message', onYouTubeMessage);
         trailerIframe.addEventListener('load', () => { try { trailerIframe.contentWindow.postMessage(JSON.stringify({ event: 'listening' }), '*'); } catch (err) {} });
-        requestAnimationFrame(() => tc.classList.add('active'));
+        requestAnimationFrame(() => {
+            tc.classList.add('active');
+            // Scale iframe to fill container (crop letterbox, hide YouTube controls)
+            trailerScaleFn = () => {
+                if (!trailerIframe || !trailerIframe.parentNode) return;
+                const cw = trailerIframe.parentNode.clientWidth;
+                const ch = trailerIframe.parentNode.clientHeight;
+                if (cw === 0 || ch === 0) return;
+                const targetRatio = 16 / 9;
+                const containerRatio = cw / ch;
+                let scale;
+                if (containerRatio > targetRatio) {
+                    // Container wider than 16:9 — scale to fill width
+                    scale = cw / (ch * targetRatio);
+                } else {
+                    // Container taller than 16:9 — scale to fill height
+                    scale = ch / (cw / targetRatio);
+                }
+                trailerIframe.style.transform = `translate(-50%,-50%) scale(${Math.max(scale, 1)})`;
+            };
+            setTimeout(trailerScaleFn, 100);
+            window.addEventListener('resize', trailerScaleFn);
+        });
     }
     function toggleTrailerMute() {
         if (!trailerIframe) return;
