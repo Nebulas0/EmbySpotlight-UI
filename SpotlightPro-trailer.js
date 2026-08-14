@@ -236,9 +236,9 @@ function insertStyles() {
 /* === Trailer Support === */
 .spotlight .trailer-button-overlay{position:absolute;top:2rem;right:12rem;z-index:25;opacity:0;transition:opacity .3s ease;pointer-events:none}
 .spotlight-container:hover .trailer-button-overlay{opacity:1;pointer-events:all}
-.spotlight .trailer-button{width:64px;height:64px;border-radius:50%;background:rgba(55,55,55,.3);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.spotlight .trailer-button{width:80px;height:80px;border-radius:50%;background:rgba(55,55,55,.3);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.4)}
 .spotlight .trailer-button:hover{transform:scale(1.02);background:${CONFIG.playbuttonColor};box-shadow:0 6px 20px rgba(0,0,0,.5)}
-.spotlight .trailer-button svg{width:28px;height:28px;fill:#fff;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3))}
+.spotlight .trailer-button svg{width:36px;height:36px;fill:#fff;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3))}
 .spotlight .trailer-container{position:absolute;top:0;left:0;width:100%;height:100%;z-index:20;opacity:0;pointer-events:none;transition:opacity .4s ease;background:#000;overflow:hidden}
 .spotlight .trailer-container.active{opacity:1;pointer-events:auto}
 .spotlight .trailer-iframe{width:100%;height:100%;border:none;display:block}
@@ -721,7 +721,7 @@ function attachSliderBehavior(state, apiClient) {
     let touchStartX = 0, touchStartY = 0, touchEndX = 0, touchEndY = 0, isSwiping = false, swipeStartTime = 0;
     let autoplayTimer = null, progressTimer = null, isAutoplayPaused = false;
     let trailerActive = false, trailerIframe = null, trailerMuted = true;
-    function onYouTubeMessage(e) { if (e.origin !== 'https://www.youtube.com') return; try { const data = JSON.parse(e.data); if (data.event === 'infoDelivery' && data.info && data.info.playerState === 0) stopTrailer(); } catch (err) {} }
+    function onYouTubeMessage(e) { try { if (typeof e.data !== 'string') return; const data = JSON.parse(e.data); if (data.event === 'initialDelivery' && data.info) { trailerIframe?.contentWindow.postMessage(JSON.stringify({ event: 'listening' }), '*'); return; } if (data.event === 'infoDelivery' && data.info) { if (data.info.playerState === 0) stopTrailer(); } } catch (err) {} }
 
     function startProgress() {
         if (!progressBarFill || !CONFIG.enableProgressBar) return;
@@ -794,6 +794,7 @@ function attachSliderBehavior(state, apiClient) {
         trailerMuted = CONFIG.trailerStartMuted;
         trailerActive = true;
         window.addEventListener('message', onYouTubeMessage);
+        trailerIframe.addEventListener('load', () => { try { trailerIframe.contentWindow.postMessage(JSON.stringify({ event: 'listening' }), '*'); } catch (err) {} });
         requestAnimationFrame(() => tc.classList.add('active'));
     }
     function toggleTrailerMute() {
