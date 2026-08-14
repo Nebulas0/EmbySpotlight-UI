@@ -16,7 +16,7 @@
 'use strict';
 
 const CONFIG = {
-    imageWidth: 1900,
+    imageWidth: 1280,
     preloadWidth: 1280,
     limit: 10,
     autoplayInterval: 8000,
@@ -136,12 +136,14 @@ function formatRuntime(minutes) {
 
 function preloadImages(items, apiClient) {
     if (!CONFIG.enablePreloading) return Promise.resolve();
-    // Use a smaller width for preloading (faster) — the browser will
-    // scale it up. Full-res loads on demand when the slide is shown.
+    // Only preload the FIRST 3 images (visible above the fold) at reduced size.
+    // The rest load on-demand when slides are shown. This avoids waiting
+    // for all 10 images before showing the slider.
     const preloadW = Math.min(CONFIG.preloadWidth, 800);
-    return Promise.all(items.map(item => new Promise(resolve => {
+    const toPreload = items.slice(0, 3);
+    return Promise.all(toPreload.map(item => new Promise(resolve => {
         const img = new Image();
-        const to = setTimeout(resolve, 1500);
+        const to = setTimeout(resolve, 800);
         img.onload = () => { clearTimeout(to); resolve(); };
         img.onerror = () => { clearTimeout(to); resolve(); };
         img.src = getImageUrl(apiClient, item, { width: preloadW, prefer: "Backdrop" });
@@ -379,34 +381,27 @@ function getRandomStartIndex(batchSize) {
 
 async function fetchInitialGroup(apiClient, parentId) {
     const fetchSize = CONFIG.limit * 2;
-    // Single query: get items AND total count in one round-trip.
-    // Use a random startIndex from 0 (since we don't know total yet).
-    // The TotalRecordCount from this query enables random windows for
-    // subsequent batch fetches.
-    const q = buildQuery(parentId, { limit: fetchSize, startIndex: 0, enableTotal: true });
+    // SINGLE query: get items + total count in one round-trip.
+    // Use a random startIndex for variety. We don't know the total yet,
+    // but a large random start works fine — Emby clamps to available items.
+    // For small libraries, startIndex=0 is used (no random needed).
+    // Use a random start within a reasonable range (0-5000) to avoid
+    // always showing the same newest items.
+    const estimatedStart = Math.floor(Math.random() * 500);
+    const q = buildQuery(parentId, { limit: fetchSize, startIndex: estimatedStart, enableTotal: true });
     const result = await apiClient.getItems(apiClient.getCurrentUserId(), q);
     if (result?.TotalRecordCount != null) {
         STATE.totalRecordCount = result.TotalRecordCount;
         console.log(`[SpotlightTrailer] Total unplayed items: ${STATE.totalRecordCount}`);
     }
     let allItems = (result?.Items || []);
-
-    // If we have a large library, try a random window for variety on reload.
-    // Do this as a second query only if the library is big enough to warrant it.
-    if (STATE.totalRecordCount > fetchSize * 3) {
-        try {
-            const randomStart = getRandomStartIndex(fetchSize);
-            const rq = buildQuery(parentId, { limit: fetchSize, startIndex: randomStart, enableTotal: false });
-            const randomResult = await apiClient.getItems(apiClient.getCurrentUserId(), rq);
-            const randomItems = randomResult?.Items || [];
-            if (randomItems.length >= CONFIG.limit) {
-                // Use the random window as display, push the first query items to pool
-                allItems = randomItems;
-                STATE.itemPool.push(...(result.Items || []));
-            }
-        } catch (e) { /* fall back to sequential items */ }
+    // If we got fewer than requested and total is large, the start was too high
+    // — fall back to startIndex=0 in a single quick retry
+    if (allItems.length < CONFIG.limit && STATE.totalRecordCount > fetchSize) {
+        const q2 = buildQuery(parentId, { limit: fetchSize, startIndex: 0, enableTotal: false });
+        const result2 = await apiClient.getItems(apiClient.getCurrentUserId(), q2);
+        allItems = result2?.Items || [];
     }
-
     console.log(`[SpotlightTrailer] Initial fetch returned ${allItems.length} items`);
     if (allItems.length <= CONFIG.limit) return allItems;
     const display = allItems.slice(0, CONFIG.limit);
@@ -581,7 +576,15 @@ function createBannerElement(item, apiClient) {
     img.className = "banner-cover " + kb.name;
     img.style.animation = kb.css;
     img.draggable = false; img.alt = item.Name || ""; img.loading = "eager"; img.decoding = "async";
-    img.src = getImageUrl(apiClient, item, { width: CONFIG.imageWidth, prefer: "Backdrop" });
+    // Progressive loading: start with 800px for fast paint, upgrade to full res after
+    const lowResUrl = getImageUrl(apiClient, item, { width: 800, prefer: "Backdrop" });
+    const fullResUrl = getImageUrl(apiClient, item, { width: CONFIG.imageWidth, prefer: "Backdrop" });
+    img.src = lowResUrl;
+    if (lowResUrl !== fullResUrl) {
+        const fullImg = new Image();
+        fullImg.onload = () => { if (img.parentNode) img.src = fullResUrl; };
+        fullImg.src = fullResUrl;
+    }
     div.appendChild(img);
     ['banner-gradient-left','banner-gradient-right','banner-vignette-top','banner-vignette-bottom'].forEach(c => { const e = document.createElement("div"); e.className = c; div.appendChild(e); });
     if (CONFIG.enableBlurBackdrop) { const b = document.createElement("div"); b.className = "banner-info-backdrop"; div.appendChild(b); }
@@ -991,7 +994,8 @@ async function init() {
         if (!apiClient) { SPOTLIGHT_INITIALIZED = false; return; }
         const items = await fetchItems(apiClient);
         if (!items?.length) { SPOTLIGHT_INITIALIZED = false; return; }
-        await preloadImages(items, apiClient);
+        // Don't wait for preloadImages — buildSlider has progressive loading.
+        // Show the slider immediately with low-res images that upgrade to full-res.
         const { container, spotlight, slider, btnLeft, btnRight, controls, controlsWrapper, slideCounter, favoriteButtonOverlay, progressBarFill, trailerButtonOverlay, trailerControls, unmuteBtn, fullscreenBtn, closeTrailerBtn } = buildSlider(items, apiClient);
         const reference = home.querySelector ? home.querySelector(".homeSectionsContainer") : null;
         if (reference?.parentNode) reference.parentNode.insertBefore(container, reference);
@@ -1035,11 +1039,11 @@ function observeViewAndInit() {
     let homeWasVisible = false, initTimeout = null;
     const observer = new MutationObserver(() => {
         const hv = !!document.querySelector(".view:not(.hide) .homeSectionsContainer, .view:not(.hide) [data-view='home'], .view:not(.hide) .view-home-home");
-        if (hv && !homeWasVisible) { homeWasVisible = true; if (initTimeout) clearTimeout(initTimeout); initTimeout = setTimeout(() => { if (!SPOTLIGHT_INITIALIZED) init(); }, 50); }
+        if (hv && !homeWasVisible) { homeWasVisible = true; if (initTimeout) clearTimeout(initTimeout); initTimeout = setTimeout(() => { if (!SPOTLIGHT_INITIALIZED) init(); }, 20); }
         if (!hv && homeWasVisible) { homeWasVisible = false; cleanup(); }
     });
     observer.observe(document.body, { childList: true, subtree: true });
-    setTimeout(() => { const hv = !!document.querySelector(".view:not(.hide) .homeSectionsContainer, .view:not(.hide) [data-view='home']"); if (hv && !SPOTLIGHT_INITIALIZED) { homeWasVisible = true; init(); } }, 100);
+    setTimeout(() => { const hv = !!document.querySelector(".view:not(.hide) .homeSectionsContainer, .view:not(.hide) [data-view='home']"); if (hv && !SPOTLIGHT_INITIALIZED) { homeWasVisible = true; init(); } }, 50);
 }
 
 observeViewAndInit();
