@@ -270,7 +270,7 @@ function insertStyles() {
     .spotlight .trailer-controls{top:.5rem !important;right:.5rem !important;left:auto !important;bottom:auto !important;gap:.4rem !important}
     .spotlight.trailer-playing .trailer-controls{opacity:1 !important;pointer-events:auto !important}
     .spotlight.trailer-playing .arrow{opacity:.4 !important;pointer-events:auto !important}
-    .spotlight.trailer-playing .trailer-seek-bar{opacity:1 !important;bottom:4rem !important;height:8px !important}
+    .spotlight.trailer-playing .trailer-seek-bar{bottom:5rem !important;height:8px !important}
     .spotlight .trailer-control-btn{width:36px !important;height:36px !important}
     .spotlight .trailer-control-btn svg{width:18px !important;height:18px !important}
     .spotlight .progress-bar-container{height:2px !important}
@@ -294,9 +294,10 @@ function insertStyles() {
 .spotlight .trailer-control-btn:hover{background:rgba(0,0,0,.8);transform:scale(1.05)}
 .spotlight .trailer-control-btn svg{width:24px;height:24px;fill:#fff}
 .spotlight .trailer-seek-bar{position:absolute;bottom:4rem;left:0;width:100%;height:8px;background:rgba(255,255,255,.2);z-index:31;cursor:pointer;opacity:0;transition:opacity .3s ease}
-.spotlight.trailer-playing .trailer-seek-bar{opacity:1}
+.spotlight.trailer-playing:hover .trailer-seek-bar{opacity:1}
 .spotlight .trailer-seek-fill{height:100%;width:0%;background:#ff0000;transition:width .1s linear}
 .spotlight .trailer-seek-bar:hover .trailer-seek-fill{background:#ff3333}
+.spotlight .trailer-seek-bar.touch-visible{opacity:1}
 .spotlight .trailer-controls .trailer-control-btn:hover{background:rgba(255,255,255,.2)}
 .spotlight .banner-item.show-trailer .banner-logo,
 .spotlight .banner-item.show-trailer .banner-info,
@@ -1071,6 +1072,18 @@ function attachSliderBehavior(state, apiClient) {
     if (state.unmuteBtn) state.unmuteBtn.addEventListener("click", (e) => { e.stopPropagation(); toggleTrailerMute(); });
     if (state.closeTrailerBtn) state.closeTrailerBtn.addEventListener("click", (e) => { e.stopPropagation(); stopTrailer(); });
     if (state.seekBar) state.seekBar.addEventListener("click", (e) => { e.stopPropagation(); if (!trailerPlayer || trailerDuration <= 0) return; const rect = state.seekBar.getBoundingClientRect(); const pct = (e.clientX - rect.left) / rect.width; const time = pct * trailerDuration; try { trailerPlayer.seekTo(time, true); } catch (err) {} });
+    // Mobile: show seek bar on touch, hide after 3 seconds
+    let seekBarHideTimer = null;
+    function showSeekBarTemporarily() {
+        if (state.seekBar) {
+            state.seekBar.classList.add('touch-visible');
+            if (seekBarHideTimer) clearTimeout(seekBarHideTimer);
+            seekBarHideTimer = setTimeout(() => { state.seekBar.classList.remove('touch-visible'); }, 3000);
+        }
+    }
+    if (spotlight) {
+        spotlight.addEventListener('touchstart', () => { if (trailerActive) showSeekBarTemporarily(); }, { passive: true });
+    }
     if (state.fullscreenBtn) state.fullscreenBtn.addEventListener("click", (e) => { e.stopPropagation(); const iframe = trailerPlayer?.getIframe?.() || trailerIframe; if (iframe) { if (iframe.requestFullscreen) iframe.requestFullscreen(); else if (iframe.webkitRequestFullscreen) iframe.webkitRequestFullscreen(); } });
     if (favoriteButtonOverlay) favoriteButtonOverlay.addEventListener("click", async (e) => {
         e.stopPropagation(); const vi = slider.children[currentIndex];
