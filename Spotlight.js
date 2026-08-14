@@ -44,6 +44,7 @@ if (typeof GM_xmlhttpRequest === 'undefined') {
 (function () {
     'use strict';
 
+    console.log("[Spotlight] Code loaded, starting initialization...");
     // ══════════════════════════════════════════════════════════════════
     // CONFIGURATION
     // ══════════════════════════════════════════════════════════════════    
@@ -1469,6 +1470,7 @@ if (typeof GM_xmlhttpRequest === 'undefined') {
             const userId = apiClient.getCurrentUserId();
             const sourceId = CONFIG.spotlightSourceId || undefined;
             const batchSize = CONFIG.spotlightBatchSize || 100;
+            console.log("[Spotlight] fetchItemsBatch: userId=" + userId + " sourceId=" + sourceId + " batchSize=" + batchSize);
 
             // Step 1: fast count query (no items, just total)
             const countQuery = {
@@ -1484,6 +1486,7 @@ if (typeof GM_xmlhttpRequest === 'undefined') {
 
             const countRes = await apiClient.getItems(userId, countQuery);
             const total = countRes?.TotalRecordCount || 0;
+            console.log("[Spotlight] Count query returned TotalRecordCount=" + total);
             if (total === 0) return [];
 
             // Step 2: fetch a batch from a random offset, sorted by year (indexed = fast)
@@ -1508,6 +1511,7 @@ if (typeof GM_xmlhttpRequest === 'undefined') {
             if (sourceId) query.ParentId = sourceId;
 
             const result = await apiClient.getItems(userId, query);
+            console.log("[Spotlight] Batch query returned " + (result?.Items?.length || 0) + " items");
             return shuffleArray(result?.Items || []);
         } catch (e) {
             console.error("[Spotlight] fetchItemsBatch error", e);
@@ -1572,6 +1576,7 @@ if (typeof GM_xmlhttpRequest === 'undefined') {
     // If the pool is exhausted, fetches a new batch of `spotlightBatchSize`.
     async function getNextDisplayItems(apiClient) {
         const displayCount = CONFIG.limit;
+        console.log("[Spotlight] getNextDisplayItems: pool=" + STATE.itemPool.length + " offset=" + STATE.poolDisplayOffset);
 
         // If pool doesn't have enough items left, fetch a new batch
         if (!STATE.itemPool.length || STATE.poolDisplayOffset + displayCount > STATE.itemPool.length) {
@@ -1590,8 +1595,10 @@ if (typeof GM_xmlhttpRequest === 'undefined') {
     }
 
     async function fetchItems(apiClient) {
+        console.log("[Spotlight] fetchItems called");
         // Check for custom items file first (legacy behavior)
         const customItemIds = await loadCustomItemsList();
+        console.log("[Spotlight] customItemIds:", customItemIds?.length || 0);
         if (customItemIds?.length > 0) {
             const items = await fetchItemsByIds(apiClient, customItemIds);
             if (items.length > 0) {
@@ -2756,10 +2763,12 @@ if (typeof GM_xmlhttpRequest === 'undefined') {
             try { if (connectionManager?.[0]?.currentApiClient) apiClient = connectionManager[0].currentApiClient(); } catch (e) { }
             if (!apiClient) { try { if (ApiClient?.[0]?.serverAddress) apiClient = ApiClient[0]; } catch (e) { } }
             if (!apiClient && window.ApiClient) apiClient = window.ApiClient;
-            if (!apiClient) { STATE.isInitializing = false; return; }
+            if (!apiClient) { console.warn("[Spotlight] No apiClient found, aborting"); STATE.isInitializing = false; return; }
+            console.log("[Spotlight] apiClient found:", apiClient.serverAddress?.() || "unknown");
             
             const items = await fetchItems(apiClient);
-            if (!items?.length) { STATE.isInitializing = false; return; }
+            console.log("[Spotlight] init: items returned =", items?.length || 0);
+            if (!items?.length) { console.warn("[Spotlight] No items found, aborting"); STATE.isInitializing = false; return; }
             
             console.log(`[Spotlight] ${items.length} items loaded`);
             
