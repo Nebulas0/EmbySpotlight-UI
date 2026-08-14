@@ -239,8 +239,6 @@ function insertStyles() {
 .spotlight .trailer-button{width:80px;height:80px;border-radius:50%;background:rgba(55,55,55,.3);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.4)}
 .spotlight .trailer-button:hover{transform:scale(1.02);background:${CONFIG.playbuttonColor};box-shadow:0 6px 20px rgba(0,0,0,.5)}
 .spotlight .trailer-button svg{width:36px;height:36px;fill:#fff;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3))}
-.spotlight .trailer-button-text{font-size:1.3rem;font-weight:700;color:#fff;text-shadow:2px 2px 8px rgba(0,0,0,.9);max-width:0;overflow:hidden;white-space:nowrap;opacity:0;transition:max-width .3s ease .1s,opacity .3s ease .1s,margin-left .3s ease .1s}
-.spotlight-container:hover .trailer-button-text{max-width:120px;opacity:1;margin-left:.8rem}
 .spotlight .trailer-container{position:absolute;top:0;left:0;width:100%;height:100%;z-index:5;opacity:0;pointer-events:none;transition:opacity .4s ease;background:#000;overflow:hidden}
 .spotlight .trailer-container.active{opacity:1;pointer-events:auto}
 .spotlight .trailer-iframe{width:100%;height:100%;border:none;display:block}
@@ -249,6 +247,13 @@ function insertStyles() {
 .spotlight .trailer-control-btn{width:48px;height:48px;border-radius:50%;background:rgba(0,0,0,.6);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s ease;color:#fff}
 .spotlight .trailer-control-btn:hover{background:rgba(0,0,0,.8);transform:scale(1.05)}
 .spotlight .trailer-control-btn svg{width:24px;height:24px;fill:#fff}
+.spotlight .banner-item.show-trailer .banner-logo,
+.spotlight .banner-item.show-trailer .banner-info,
+.spotlight .banner-item.show-trailer .banner-info-backdrop,
+.spotlight .banner-item.show-trailer .banner-title,
+.spotlight .banner-item.show-trailer .banner-tagline,
+.spotlight .banner-item.show-trailer .banner-overview{opacity:0;pointer-events:none;transition:opacity .4s ease}
+.spotlight .banner-item.show-trailer .banner-logo{z-index:0}
 .spotlight .trailer-container.active ~ .banner-gradient-left,
 .spotlight .trailer-container.active ~ .banner-gradient-right,
 .spotlight .trailer-container.active ~ .banner-vignette-top,
@@ -637,10 +642,6 @@ function buildSlider(items, apiClient) {
     trailerButton.setAttribute("aria-label", "Watch Trailer");
     trailerButton.innerHTML = `<svg viewBox="0 0 24 24"><path d="M4,6H2V20A2,2 0 0,0 4,22H18V20H4V6M20,2H8A2,2 0 0,0 6,4V16A2,2 0 0,0 8,18H20A2,2 0 0,0 22,16V4A2,2 0 0,0 20,2M22,16H8V4H20V16M12,6.5L18,10L12,13.5V6.5Z"/></svg>`;
     trailerButtonOverlay.appendChild(trailerButton);
-    const trailerText = document.createElement("span");
-    trailerText.className = "trailer-button-text";
-    trailerText.textContent = "Trailer";
-    trailerButtonOverlay.appendChild(trailerText);
     spotlight.appendChild(trailerButtonOverlay);
     const favoriteButtonOverlay = document.createElement("div");
     favoriteButtonOverlay.className = "favorite-button-overlay";
@@ -751,11 +752,12 @@ function attachSliderBehavior(state, apiClient) {
     function stopTrailer() {
         if (trailerIframe) { trailerIframe.src = ''; trailerIframe.remove(); trailerIframe = null; }
         const vi = slider.children[currentIndex];
-        if (vi) { const tc = vi.querySelector('.trailer-container'); if (tc) tc.classList.remove('active'); }
+        if (vi) { const tc = vi.querySelector('.trailer-container'); if (tc) tc.classList.remove('active'); vi.classList.remove('show-trailer'); }
         trailerActive = false; trailerMuted = true;
         const ub = state.trailerControls?.querySelector('.unmute-btn');
         if (ub) { ub.innerHTML = `<svg viewBox="0 0 24 24"><path d="M12,4L9.91,6.09L12,8.18M4.27,3L3,4.27L7.73,9H3V15H7L12,20V13.27L16.25,17.52C15.59,18 14.84,18.35 14,18.53V20.59C15.28,20.38 16.5,19.9 17.5,19.18L19.73,21.41L21,20.14L4.27,3M19,12C19,12.82 18.86,13.61 18.61,14.34L20.12,15.85C20.68,14.66 21,13.37 21,12C21,7.72 18,4.14 14,3.23V5.29C16.89,6.15 19,8.83 19,12M12,4L9.91,6.09L12,8.18V4Z"/></svg>`; ub.title = "Unmute"; }
         startAutoplay();
+        startProgress();
     }
     function startTrailer() {
         const vi = slider.children[currentIndex];
@@ -766,7 +768,9 @@ function attachSliderBehavior(state, apiClient) {
         if (!tc) return;
         if (trailerIframe) { trailerIframe.src = ''; trailerIframe.remove(); }
         stopAutoplay();
-        const params = new URLSearchParams({ autoplay: '1', mute: CONFIG.trailerStartMuted ? '1' : '0', controls: '1', modestbranding: '1', rel: '0', playsinline: '1' });
+        stopProgress();
+        vi.classList.add('show-trailer');
+        const params = new URLSearchParams({ autoplay: '1', mute: CONFIG.trailerStartMuted ? '1' : '0', controls: '1', modestbranding: '1', rel: '0', playsinline: '1', enablejsapi: '1' });
         trailerIframe = document.createElement('iframe');
         trailerIframe.className = 'trailer-iframe';
         trailerIframe.src = `https://www.youtube.com/embed/${trailerId}?${params.toString()}`;
@@ -780,11 +784,13 @@ function attachSliderBehavior(state, apiClient) {
     function toggleTrailerMute() {
         if (!trailerIframe) return;
         trailerMuted = !trailerMuted;
-        const vi = slider.children[currentIndex];
-        const trailerId = vi?.dataset?.trailerId;
-        if (!trailerId) return;
-        const params = new URLSearchParams({ autoplay: '1', mute: trailerMuted ? '1' : '0', controls: '1', modestbranding: '1', rel: '0', playsinline: '1' });
-        trailerIframe.src = `https://www.youtube.com/embed/${trailerId}?${params.toString()}`;
+        // Use YouTube IFrame API postMessage to unmute/mute without reloading
+        const cmd = trailerMuted ? 'mute' : 'unMute';
+        trailerIframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: cmd, args: [] }), '*');
+        // Also set volume to 100% when unmuting
+        if (!trailerMuted) {
+            trailerIframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'setVolume', args: [100] }), '*');
+        }
         const ub = state.trailerControls?.querySelector('.unmute-btn');
         if (ub) {
             if (trailerMuted) { ub.innerHTML = `<svg viewBox="0 0 24 24"><path d="M12,4L9.91,6.09L12,8.18M4.27,3L3,4.27L7.73,9H3V15H7L12,20V13.27L16.25,17.52C15.59,18 14.84,18.35 14,18.53V20.59C15.28,20.38 16.5,19.9 17.5,19.18L19.73,21.41L21,20.14L4.27,3M19,12C19,12.82 18.86,13.61 18.61,14.34L20.12,15.85C20.68,14.66 21,13.37 21,12C21,7.72 18,4.14 14,3.23V5.29C16.89,6.15 19,8.83 19,12M12,4L9.91,6.09L12,8.18V4Z"/></svg>`; ub.title = "Unmute"; }
