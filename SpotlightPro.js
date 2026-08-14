@@ -193,8 +193,8 @@ function insertStyles() {
 .spotlight .banner-vignette-bottom{position:absolute;bottom:0;left:0;right:0;height:30%;background:linear-gradient(to top,rgba(${rgb.r},${rgb.g},${rgb.b},.85) 0%,rgba(${rgb.r},${rgb.g},${rgb.b},.6) 30%,rgba(${rgb.r},${rgb.g},${rgb.b},.3) 60%,transparent 100%);pointer-events:none;z-index:6}
 .spotlight .banner-info-backdrop{position:absolute;left:0;top:0;width:100%;height:100%;z-index:8;pointer-events:none;background:rgba(${rgb.r},${rgb.g},${rgb.b},.2);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);opacity:0;transition:opacity .3s ease}
 .spotlight .banner-item.show-overview .banner-info-backdrop{opacity:1}
-.spotlight .banner-logo{position:absolute;left:50%;top:45%;transform:translate(-50%,-50%);max-width:60%;max-height:50%;object-fit:contain;z-index:15;filter:drop-shadow(0 4px 12px rgba(0,0,0,.8)) drop-shadow(0 0 1px rgba(255,255,255,.4));pointer-events:auto;cursor:pointer;transition:transform .5s ease,opacity .3s ease,filter .3s ease}
-.spotlight-container:hover .banner-logo{transform:translate(-50%,-50%) scale(1.1);filter:drop-shadow(0 6px 16px rgba(0,0,0,.8)) drop-shadow(0 0 1px rgba(255,255,255,.5))}
+.spotlight .banner-logo{position:absolute;left:50%;top:45%;transform:translate(-50%,-50%);max-width:60%;max-height:50%;object-fit:contain;z-index:15;filter:drop-shadow(0 6px 20px rgba(0,0,0,.95)) drop-shadow(0 0 40px rgba(0,0,0,.6));pointer-events:auto;cursor:pointer;transition:transform .5s ease,opacity .3s ease}
+.spotlight-container:hover .banner-logo{transform:translate(-50%,-50%) scale(1.1)}
 .spotlight .banner-logo.hidden{opacity:0;pointer-events:none}
 .spotlight .banner-title{position:absolute;left:50%;top:45%;transform:translate(-50%,-50%);z-index:10;font-size:clamp(1.5rem,3.5vw,3rem);font-weight:700;color:#fff;text-shadow:2px 2px 8px rgba(0,0,0,.9);pointer-events:auto;cursor:pointer;text-align:center;max-width:80%;transition:transform .5s ease,opacity .3s ease}
 .spotlight-container:hover .banner-title{transform:translate(-50%,-50%) scale(1.1)}
