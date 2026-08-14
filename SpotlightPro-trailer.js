@@ -1106,11 +1106,12 @@ function attachSliderBehavior(state, apiClient) {
     if (trailerBtnOverlay) trailerBtnOverlay.addEventListener("click", (e) => { e.stopPropagation(); if (trailerActive) stopTrailer(); else startTrailer(); });
     if (state.unmuteBtn) state.unmuteBtn.addEventListener("click", (e) => { e.stopPropagation(); toggleTrailerMute(); });
     if (state.closeTrailerBtn) state.closeTrailerBtn.addEventListener("click", (e) => { e.stopPropagation(); stopTrailer(); });
-    // TV: pause autoplay when any button gains focus
+    // TV: pause autoplay when any button gains focus, resume on blur
     if (IS_TV) {
         const allButtons = spotlight.querySelectorAll('button');
         allButtons.forEach(btn => {
             btn.addEventListener('focus', () => { if (!trailerActive) { stopAutoplay(); stopProgress(); } });
+            btn.addEventListener('blur', () => { if (!trailerActive && !isAutoplayPaused) { startAutoplay(); startProgress(); } });
         });
     }
     if (state.seekBar) state.seekBar.addEventListener("click", (e) => { e.stopPropagation(); if (!trailerPlayer || trailerDuration <= 0) return; const rect = state.seekBar.getBoundingClientRect(); const pct = (e.clientX - rect.left) / rect.width; const time = pct * trailerDuration; try { trailerPlayer.seekTo(time, true); } catch (err) {} });
@@ -1182,6 +1183,8 @@ function attachSliderBehavior(state, apiClient) {
             if (trailerActive) {
                 // Trailer mode: navigate between trailer controls
                 const tEls = trailerFocusableElements();
+                // Clamp index to trailer controls range
+                if (tvFocusIndex >= tEls.length) tvFocusIndex = 0;
                 if (e.key === 'ArrowLeft') { e.preventDefault(); focusTVElement(tvFocusIndex - 1, tEls); }
                 else if (e.key === 'ArrowRight') { e.preventDefault(); focusTVElement(tvFocusIndex + 1, tEls); }
                 else if (e.key === 'ArrowUp') { e.preventDefault(); focusTVElement(0, tEls); }
@@ -1206,7 +1209,11 @@ function attachSliderBehavior(state, apiClient) {
                         if (vi?.dataset?.trailerId) startTrailer();
                     }
                 } else {
-                    if (autoplayTimer) stopAutoplay(); else startAutoplay();
+                    // Desktop: Enter/Space toggles autoplay
+                    if (e.key === ' ') { if (autoplayTimer) stopAutoplay(); else startAutoplay(); }
+                    // Enter on desktop: if a button is focused, click it
+                    const focused = document.activeElement;
+                    if (e.key === 'Enter' && focused && spotlight.contains(focused) && focused.tagName === 'BUTTON') focused.click();
                 }
             }
             else if (e.key === 'ArrowUp' && IS_TV) {
