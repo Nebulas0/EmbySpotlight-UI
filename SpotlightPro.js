@@ -120,12 +120,15 @@ function formatRuntime(minutes) {
 
 function preloadImages(items, apiClient) {
     if (!CONFIG.enablePreloading) return Promise.resolve();
+    // Use a smaller width for preloading (faster) — the browser will
+    // scale it up. Full-res loads on demand when the slide is shown.
+    const preloadW = Math.min(CONFIG.preloadWidth, 800);
     return Promise.all(items.map(item => new Promise(resolve => {
         const img = new Image();
-        const to = setTimeout(resolve, 2000);
+        const to = setTimeout(resolve, 1500);
         img.onload = () => { clearTimeout(to); resolve(); };
         img.onerror = () => { clearTimeout(to); resolve(); };
-        img.src = getImageUrl(apiClient, item, { width: CONFIG.preloadWidth, prefer: "Backdrop" });
+        img.src = getImageUrl(apiClient, item, { width: preloadW, prefer: "Backdrop" });
     })));
 }
 
@@ -330,22 +333,34 @@ function getRandomStartIndex(batchSize) {
 
 async function fetchInitialGroup(apiClient, parentId) {
     const fetchSize = CONFIG.limit * 2;
-    // Preflight: learn TotalRecordCount so we can pick a truly random window
-    if (STATE.totalRecordCount == null) {
-        try {
-            const preflightQ = buildQuery(parentId, { limit: 1, enableTotal: true });
-            const preflight = await apiClient.getItems(apiClient.getCurrentUserId(), preflightQ);
-            if (preflight?.TotalRecordCount != null) {
-                STATE.totalRecordCount = preflight.TotalRecordCount;
-                console.log(`[SpotlightPro] Preflight total unplayed items: ${STATE.totalRecordCount}`);
-            }
-        } catch (e) { console.warn('[SpotlightPro] Preflight count failed', e); }
-    }
-    const startIndex = getRandomStartIndex(fetchSize);
-    const q = buildQuery(parentId, { limit: fetchSize, startIndex, enableTotal: false });
-    console.log(`[SpotlightPro] Initial fetch: startIndex=${startIndex}, limit=${fetchSize}`);
+    // Single query: get items AND total count in one round-trip.
+    // Use a random startIndex from 0 (since we don't know total yet).
+    // The TotalRecordCount from this query enables random windows for
+    // subsequent batch fetches.
+    const q = buildQuery(parentId, { limit: fetchSize, startIndex: 0, enableTotal: true });
     const result = await apiClient.getItems(apiClient.getCurrentUserId(), q);
-    const allItems = result?.Items || [];
+    if (result?.TotalRecordCount != null) {
+        STATE.totalRecordCount = result.TotalRecordCount;
+        console.log(`[SpotlightPro] Total unplayed items: ${STATE.totalRecordCount}`);
+    }
+    let allItems = (result?.Items || []);
+
+    // If we have a large library, try a random window for variety on reload.
+    // Do this as a second query only if the library is big enough to warrant it.
+    if (STATE.totalRecordCount > fetchSize * 3) {
+        try {
+            const randomStart = getRandomStartIndex(fetchSize);
+            const rq = buildQuery(parentId, { limit: fetchSize, startIndex: randomStart, enableTotal: false });
+            const randomResult = await apiClient.getItems(apiClient.getCurrentUserId(), rq);
+            const randomItems = randomResult?.Items || [];
+            if (randomItems.length >= CONFIG.limit) {
+                // Use the random window as display, push the first query items to pool
+                allItems = randomItems;
+                STATE.itemPool.push(...(result.Items || []));
+            }
+        } catch (e) { /* fall back to sequential items */ }
+    }
+
     console.log(`[SpotlightPro] Initial fetch returned ${allItems.length} items`);
     if (allItems.length <= CONFIG.limit) return allItems;
     const display = allItems.slice(0, CONFIG.limit);
@@ -404,21 +419,34 @@ async function navigateToGenre(genre, apiClient) {
         const sid = apiClient.serverId || apiClient.serverInfo?.Id || apiClient._serverInfo?.Id;
         const parentId = CONFIG.collectionId || CONFIG.libraryId || '';
         const userId = apiClient.getCurrentUserId();
+        const token = apiClient.accessToken ? apiClient.accessToken() : null;
 
-        // Fetch the genre ID from Emby API
+        // Fetch the genre ID from Emby API using direct fetch
         let genreId = null;
         try {
-            const genresUrl = apiClient.getUrl('Genres', { ParentId: parentId, UserId: userId });
-            const response = await apiClient.ajax({ type: 'GET', url: genresUrl }, apiClient);
-            const data = JSON.parse(response);
-            const found = (data.Items || []).find(g => g.Name === genre);
-            if (found) genreId = found.Id;
+            const params = new URLSearchParams();
+            if (parentId) params.set('ParentId', parentId);
+            if (userId) params.set('UserId', userId);
+            const fetchUrl = apiClient.serverAddress() + '/Genres?' + params.toString();
+            const headers = {};
+            if (token) headers['X-Emby-Token'] = token;
+            const response = await fetch(fetchUrl, { headers });
+            if (response.ok) {
+                const data = await response.json();
+                const found = (data.Items || []).find(g => g.Name === genre);
+                if (found) genreId = found.Id;
+            }
         } catch (e) {
             console.warn('[SpotlightPro] Failed to fetch genre ID for', genre, e);
         }
 
         if (!genreId) {
-            console.warn('[SpotlightPro] Genre ID not found for', genre);
+            console.warn('[SpotlightPro] Genre ID not found for', genre, '- falling back to text search');
+            // Fallback: use the genres text parameter format
+            let url = '/web/index.html#!/list/list.html?genres=' + encodeURIComponent(genre);
+            if (sid) url += '&serverId=' + sid;
+            if (parentId) url += '&parentId=' + parentId;
+            window.location.href = url;
             return;
         }
 
@@ -772,10 +800,23 @@ async function init() {
         if (loader) loader.style.display = "none";
         const sliderState = { slider, itemsCount: items.length, btnLeft, btnRight, controls, controlsWrapper, slideCounter, spotlight, favoriteButtonOverlay, progressBarFill, container };
         sliderState.preloadNext = async function() { if (!STATE.nextGroupReady) await preloadNextGroup(apiClient); };
-        sliderState.onCycleComplete = async function() {
-            let nextGroup = STATE.nextGroupReady; STATE.nextGroupReady = null;
-            if (!nextGroup) nextGroup = await preloadNextGroup(apiClient);
-            if (nextGroup?.length > 0 && typeof sliderState.swapGroup === 'function') sliderState.swapGroup(nextGroup);
+        sliderState.onCycleComplete = function() {
+            if (STATE.nextGroupReady) {
+                // Group is preloaded — swap immediately, no async delay
+                const nextGroup = STATE.nextGroupReady;
+                STATE.nextGroupReady = null;
+                if (nextGroup?.length > 0 && typeof sliderState.swapGroup === 'function')
+                    sliderState.swapGroup(nextGroup);
+            } else {
+                // Not preloaded yet — swap will show old content briefly,
+                // but at least start fetching immediately
+                console.warn('[SpotlightPro] Next group not preloaded in time, fetching now');
+                preloadNextGroup(apiClient).then(group => {
+                    STATE.nextGroupReady = null;
+                    if (group?.length > 0 && typeof sliderState.swapGroup === 'function')
+                        sliderState.swapGroup(group);
+                });
+            }
         };
         attachSliderBehavior(sliderState, apiClient);
         SPOTLIGHT_INSTANCE = { container, cleanup: null };
