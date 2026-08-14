@@ -232,12 +232,12 @@ function insertStyles() {
 @media (max-width:768px),(orientation:portrait){.spotlight .control{display:none}}
 .spotlight .slide-counter{font-size:.95rem;font-weight:600;color:rgba(255,255,255,.7);text-shadow:1px 1px 4px rgba(0,0,0,.9);min-width:3.5rem;text-align:right;pointer-events:none}
 @media (max-width:768px),(orientation:portrait){.spotlight .slide-counter{display:none}}
-.spotlight .progress-bar-container{position:absolute;left:0;bottom:4rem;width:100%;height:3px;z-index:22;background:rgba(255,255,255,.1);pointer-events:none;overflow:hidden}
+.spotlight .progress-bar-container{position:absolute;left:0;bottom:0;width:100%;height:3px;z-index:22;background:rgba(255,255,255,.1);pointer-events:none;border-radius:0 0 .5rem .5rem;overflow:hidden}
 .spotlight .progress-bar-fill{height:100%;width:0%;background:${frameColor};transition:width .1s linear;box-shadow:0 0 8px ${frameColor}}
 
 /* === Mobile Responsive === */
 @media (max-width:768px),(orientation:portrait){
-    .spotlight-container.spotlight-pro{width:94% !important;margin-top:8rem !important;margin-bottom:-6rem !important;border-radius:.5rem !important}
+    .spotlight-container.spotlight-pro{width:100% !important;margin-top:8rem !important;margin-bottom:-6rem !important;border-radius:0 !important;margin-left:0 !important;margin-right:0 !important}
     .spotlight .banner-slider-wrapper{border-radius:0 !important}
     .spotlight .banner-cover{height:min(50vmax,38vh) !important}
     .spotlight .play-button-overlay{top:.5rem !important;right:.5rem !important;left:auto !important;bottom:auto !important;opacity:1 !important;pointer-events:auto !important}
@@ -259,7 +259,7 @@ function insertStyles() {
     .spotlight.trailer-playing .trailer-controls{opacity:1 !important;pointer-events:auto !important}
     .spotlight .trailer-control-btn{width:36px !important;height:36px !important}
     .spotlight .trailer-control-btn svg{width:18px !important;height:18px !important}
-    .spotlight .progress-bar-container{height:2px !important;bottom:3rem !important}
+    .spotlight .progress-bar-container{height:2px !important}
     .spotlight .controls-wrapper{right:.5rem !important;bottom:.5rem !important;top:auto !important;left:auto !important}
 }
 
@@ -270,9 +270,9 @@ function insertStyles() {
 .spotlight .trailer-button{width:64px;height:64px;border-radius:50%;background:rgba(55,55,55,.3);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.4)}
 .spotlight .trailer-button:hover{transform:scale(1.02);background:${CONFIG.playbuttonColor};box-shadow:0 6px 20px rgba(0,0,0,.5)}
 .spotlight .trailer-button svg{width:28px;height:28px;fill:#fff;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3))}
-.spotlight .trailer-container{position:absolute;top:0;left:0;width:100%;height:100%;z-index:20;opacity:0;pointer-events:none;transition:opacity .4s ease;background:#000;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.spotlight .trailer-container{position:absolute;top:0;left:0;width:100%;height:100%;z-index:20;opacity:0;pointer-events:none;transition:opacity .4s ease;background:#000;overflow:hidden}
 .spotlight .trailer-container.active{opacity:1;pointer-events:auto}
-.spotlight .trailer-iframe{width:100%;height:100%;border:none;display:block;position:absolute;top:0;left:0;transform-origin:center center}
+.spotlight .trailer-iframe{width:100%;height:100%;border:none;display:block;position:absolute;top:0;left:0}
 .spotlight .trailer-controls{position:absolute;top:2rem;left:2rem;z-index:30;display:flex;gap:.8rem;opacity:0;transition:opacity .3s ease;pointer-events:none}
 .spotlight.trailer-playing:hover .trailer-controls{opacity:1;pointer-events:auto}
 .spotlight.trailer-playing .trailer-controls{opacity:1;pointer-events:auto}
@@ -754,7 +754,6 @@ function attachSliderBehavior(state, apiClient) {
     let touchStartX = 0, touchStartY = 0, touchEndX = 0, touchEndY = 0, isSwiping = false, swipeStartTime = 0;
     let autoplayTimer = null, progressTimer = null, isAutoplayPaused = false;
     let trailerActive = false, trailerIframe = null, trailerMuted = true;
-    let trailerScaleFn = null;
     function onYouTubeMessage(e) { try { if (typeof e.data !== 'string') return; const data = JSON.parse(e.data); if (data.event === 'initialDelivery' && data.info) { trailerIframe?.contentWindow.postMessage(JSON.stringify({ event: 'listening' }), '*'); return; } if (data.event === 'infoDelivery' && data.info) { if (data.info.playerState === 0) stopTrailer(); } } catch (err) {} }
 
     function startProgress() {
@@ -803,7 +802,6 @@ function attachSliderBehavior(state, apiClient) {
         window.removeEventListener('message', onYouTubeMessage);
         // Remove scale listener
         const oldScale = trailerIframe?.style.transform;
-        if (trailerScaleFn) { window.removeEventListener('resize', trailerScaleFn); trailerScaleFn = null; }
         const ub = state.trailerControls?.querySelector('.unmute-btn');
         if (ub) { ub.innerHTML = `<svg viewBox="0 0 24 24"><path d="M3,9V15H7L12,20V4L7,9H3M16.5,12C16.5,10.83 15.92,9.79 15,9.14V14.86C15.92,14.21 16.5,13.17 16.5,12M14,3.23V5.29C16.89,6.15 19,8.83 19,12C19,15.17 16.89,17.85 14,18.71V20.77C18,19.86 21,16.28 21,12C21,7.72 18,4.14 14,3.23Z"/></svg>`; ub.title = "Mute"; }
         startAutoplay();
@@ -832,27 +830,7 @@ function attachSliderBehavior(state, apiClient) {
         trailerActive = true;
         window.addEventListener('message', onYouTubeMessage);
         trailerIframe.addEventListener('load', () => { try { trailerIframe.contentWindow.postMessage(JSON.stringify({ event: 'listening' }), '*'); } catch (err) {} });
-        requestAnimationFrame(() => {
-            tc.classList.add('active');
-            // Scale iframe to fill container (crop letterbox)
-            trailerScaleFn = () => {
-                if (!trailerIframe || !trailerIframe.parentNode) return;
-                const cw = trailerIframe.parentNode.clientWidth;
-                const ch = trailerIframe.parentNode.clientHeight;
-                if (cw === 0 || ch === 0) return;
-                const targetRatio = 16 / 9;
-                const containerRatio = cw / ch;
-                let scale;
-                if (containerRatio > targetRatio) {
-                    scale = cw / (ch * targetRatio);
-                } else {
-                    scale = ch / (cw / targetRatio);
-                }
-                trailerIframe.style.transform = `scale(${Math.max(scale, 1)})`;
-            };
-            setTimeout(trailerScaleFn, 100);
-            window.addEventListener('resize', trailerScaleFn);
-        });
+        requestAnimationFrame(() => tc.classList.add('active'));
     }
     function toggleTrailerMute() {
         if (!trailerIframe) return;
