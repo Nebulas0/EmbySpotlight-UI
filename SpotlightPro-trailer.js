@@ -237,29 +237,29 @@ function insertStyles() {
 
 /* === Mobile Responsive === */
 @media (max-width:768px),(orientation:portrait){
-    .spotlight-container.spotlight-pro{width:100%;margin-top:6.5rem;margin-bottom:-5rem;border-radius:0}
-    .spotlight .banner-slider-wrapper{border-radius:0}
-    .spotlight .banner-cover{height:min(56vmax,40vh)}
-    .spotlight .play-button-overlay{top:.5rem;right:.5rem;opacity:1;pointer-events:auto}
-    .spotlight .favorite-button-overlay{top:.5rem;left:.5rem;opacity:1;pointer-events:auto}
-    .spotlight .trailer-button-overlay{top:.5rem;right:4rem;opacity:1;pointer-events:auto}
-    .spotlight .play-button,.spotlight .favorite-button,.spotlight .trailer-button{width:40px;height:40px;box-shadow:0 2px 8px rgba(0,0,0,.4)}
-    .spotlight .play-button svg{width:20px;height:20px;margin-left:2px}
-    .spotlight .favorite-button svg{width:20px;height:20px}
-    .spotlight .trailer-button svg{width:18px;height:18px}
-    .spotlight .arrow{width:32px;height:32px;opacity:.4}
-    .spotlight .arrow svg{width:28px;height:28px}
-    .spotlight .banner-logo{max-width:65%;max-height:30%}
-    .spotlight .banner-title{font-size:clamp(1rem,4vw,1.5rem)}
-    .spotlight .banner-info{left:.8rem;bottom:.8rem;max-width:90%}
-    .spotlight .banner-info-backdrop{backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
-    .spotlight .banner-genre{font-size:clamp(.8rem,2.5vw,1rem);padding:.1rem .5rem}
-    .spotlight .banner-meta-item{font-size:clamp(.8rem,2.5vw,1rem)}
-    .spotlight .trailer-controls{top:.5rem;left:.5rem;gap:.4rem;opacity:1;pointer-events:auto}
-    .spotlight .trailer-control-btn{width:36px;height:36px}
-    .spotlight .trailer-control-btn svg{width:18px;height:18px}
-    .spotlight .progress-bar-container{height:2px}
-    .spotlight .controls-wrapper{right:.5rem;bottom:.5rem}
+    .spotlight-container.spotlight-pro{width:100% !important;margin-top:7rem !important;margin-bottom:-5rem !important;border-radius:0 !important}
+    .spotlight .banner-slider-wrapper{border-radius:0 !important}
+    .spotlight .banner-cover{height:min(56vmax,40vh) !important}
+    .spotlight .play-button-overlay{top:.5rem !important;right:.5rem !important;left:auto !important;bottom:auto !important;opacity:1 !important;pointer-events:auto !important}
+    .spotlight .favorite-button-overlay{top:.5rem !important;left:.5rem !important;right:auto !important;bottom:auto !important;opacity:1 !important;pointer-events:auto !important}
+    .spotlight .trailer-button-overlay{top:.5rem !important;right:4rem !important;left:auto !important;bottom:auto !important;opacity:1 !important;pointer-events:auto !important}
+    .spotlight .play-button,.spotlight .favorite-button,.spotlight .trailer-button{width:40px !important;height:40px !important;box-shadow:0 2px 8px rgba(0,0,0,.4) !important}
+    .spotlight .play-button svg{width:20px !important;height:20px !important;margin-left:2px !important}
+    .spotlight .favorite-button svg{width:20px !important;height:20px !important}
+    .spotlight .trailer-button svg{width:18px !important;height:18px !important}
+    .spotlight .arrow{width:32px !important;height:32px !important;opacity:.4 !important}
+    .spotlight .arrow svg{width:28px !important;height:28px !important}
+    .spotlight .banner-logo{max-width:65% !important;max-height:30% !important}
+    .spotlight .banner-title{font-size:clamp(1rem,4vw,1.5rem) !important}
+    .spotlight .banner-info{left:.8rem !important;bottom:.8rem !important;max-width:90% !important}
+    .spotlight .banner-info-backdrop{backdrop-filter:blur(4px) !important;-webkit-backdrop-filter:blur(4px) !important}
+    .spotlight .banner-genre{font-size:clamp(.8rem,2.5vw,1rem) !important;padding:.1rem .5rem !important}
+    .spotlight .banner-meta-item{font-size:clamp(.8rem,2.5vw,1rem) !important}
+    .spotlight .trailer-controls{top:.5rem !important;left:.5rem !important;right:auto !important;bottom:auto !important;gap:.4rem !important;opacity:1 !important;pointer-events:auto !important}
+    .spotlight .trailer-control-btn{width:36px !important;height:36px !important}
+    .spotlight .trailer-control-btn svg{width:18px !important;height:18px !important}
+    .spotlight .progress-bar-container{height:2px !important}
+    .spotlight .controls-wrapper{right:.5rem !important;bottom:.5rem !important;top:auto !important;left:auto !important}
 }
 
 .spotlight .progress-bar-fill.paused{transition:none}
@@ -271,7 +271,7 @@ function insertStyles() {
 .spotlight .trailer-button svg{width:28px;height:28px;fill:#fff;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3))}
 .spotlight .trailer-container{position:absolute;top:0;left:0;width:100%;height:100%;z-index:20;opacity:0;pointer-events:none;transition:opacity .4s ease;background:#000;overflow:hidden;display:flex;align-items:center;justify-content:center}
 .spotlight .trailer-container.active{opacity:1;pointer-events:auto}
-.spotlight .trailer-iframe{width:100%;height:100%;border:none;display:block;position:absolute;top:0;left:0;object-fit:cover}
+.spotlight .trailer-iframe{width:100%;height:100%;border:none;display:block;position:absolute;top:0;left:0;transform-origin:center center}
 .spotlight .trailer-controls{position:absolute;top:2rem;left:2rem;z-index:30;display:flex;gap:.8rem;opacity:0;transition:opacity .3s ease;pointer-events:none}
 .spotlight.trailer-playing:hover .trailer-controls{opacity:1;pointer-events:auto}
 .spotlight.trailer-playing .trailer-controls{opacity:1;pointer-events:auto}
@@ -753,6 +753,7 @@ function attachSliderBehavior(state, apiClient) {
     let touchStartX = 0, touchStartY = 0, touchEndX = 0, touchEndY = 0, isSwiping = false, swipeStartTime = 0;
     let autoplayTimer = null, progressTimer = null, isAutoplayPaused = false;
     let trailerActive = false, trailerIframe = null, trailerMuted = true;
+    let trailerScaleFn = null;
     function onYouTubeMessage(e) { try { if (typeof e.data !== 'string') return; const data = JSON.parse(e.data); if (data.event === 'initialDelivery' && data.info) { trailerIframe?.contentWindow.postMessage(JSON.stringify({ event: 'listening' }), '*'); return; } if (data.event === 'infoDelivery' && data.info) { if (data.info.playerState === 0) stopTrailer(); } } catch (err) {} }
 
     function startProgress() {
@@ -799,6 +800,9 @@ function attachSliderBehavior(state, apiClient) {
         spotlight.classList.remove('trailer-playing');
         trailerActive = false; trailerMuted = true;
         window.removeEventListener('message', onYouTubeMessage);
+        // Remove scale listener
+        const oldScale = trailerIframe?.style.transform;
+        if (trailerScaleFn) { window.removeEventListener('resize', trailerScaleFn); trailerScaleFn = null; }
         const ub = state.trailerControls?.querySelector('.unmute-btn');
         if (ub) { ub.innerHTML = `<svg viewBox="0 0 24 24"><path d="M3,9V15H7L12,20V4L7,9H3M16.5,12C16.5,10.83 15.92,9.79 15,9.14V14.86C15.92,14.21 16.5,13.17 16.5,12M14,3.23V5.29C16.89,6.15 19,8.83 19,12C19,15.17 16.89,17.85 14,18.71V20.77C18,19.86 21,16.28 21,12C21,7.72 18,4.14 14,3.23Z"/></svg>`; ub.title = "Mute"; }
         startAutoplay();
@@ -827,7 +831,27 @@ function attachSliderBehavior(state, apiClient) {
         trailerActive = true;
         window.addEventListener('message', onYouTubeMessage);
         trailerIframe.addEventListener('load', () => { try { trailerIframe.contentWindow.postMessage(JSON.stringify({ event: 'listening' }), '*'); } catch (err) {} });
-        requestAnimationFrame(() => tc.classList.add('active'));
+        requestAnimationFrame(() => {
+            tc.classList.add('active');
+            // Scale iframe to fill container (crop letterbox)
+            trailerScaleFn = () => {
+                if (!trailerIframe || !trailerIframe.parentNode) return;
+                const cw = trailerIframe.parentNode.clientWidth;
+                const ch = trailerIframe.parentNode.clientHeight;
+                if (cw === 0 || ch === 0) return;
+                const targetRatio = 16 / 9;
+                const containerRatio = cw / ch;
+                let scale;
+                if (containerRatio > targetRatio) {
+                    scale = cw / (ch * targetRatio);
+                } else {
+                    scale = ch / (cw / targetRatio);
+                }
+                trailerIframe.style.transform = `scale(${Math.max(scale, 1)})`;
+            };
+            setTimeout(trailerScaleFn, 100);
+            window.addEventListener('resize', trailerScaleFn);
+        });
     }
     function toggleTrailerMute() {
         if (!trailerIframe) return;
