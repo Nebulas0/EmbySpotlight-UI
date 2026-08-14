@@ -27,8 +27,8 @@ const CONFIG = {
     playbuttonColor: "hsl(var(--theme-primary-color-hue), var(--theme-primary-color-saturation), var(--theme-primary-color-lightness))",
     favoriteButtonColor: "hsl(var(--theme-primary-color-hue), var(--theme-primary-color-saturation), var(--theme-primary-color-lightness))",
     customItemsFile: "spotlight-items.txt",
-    collectionId: 2421687,
-    libraryId: null,
+    collectionId: null,
+    libraryId: 2310256,
     enablePreloading: true,
     enableSwipe: true,
     swipeThreshold: 50,
@@ -174,8 +174,8 @@ function insertStyles() {
 .spotlight .banner-gradient-right{position:absolute;top:0;bottom:0;right:0;width:35%;pointer-events:none;z-index:6;background:linear-gradient(to left,${rgbaColor} 0%,${rgbaColor} 3%,rgba(${rgb.r},${rgb.g},${rgb.b},.98) 6%,rgba(${rgb.r},${rgb.g},${rgb.b},.95) 10%,rgba(${rgb.r},${rgb.g},${rgb.b},.92) 15%,rgba(${rgb.r},${rgb.g},${rgb.b},.87) 20%,rgba(${rgb.r},${rgb.g},${rgb.b},.8) 25%,rgba(${rgb.r},${rgb.g},${rgb.b},.7) 35%,rgba(${rgb.r},${rgb.g},${rgb.b},.55) 45%,rgba(${rgb.r},${rgb.g},${rgb.b},.4) 55%,rgba(${rgb.r},${rgb.g},${rgb.b},.25) 65%,rgba(${rgb.r},${rgb.g},${rgb.b},.15) 75%,rgba(${rgb.r},${rgb.g},${rgb.b},.08) 85%,rgba(${rgb.r},${rgb.g},${rgb.b},.03) 92%,transparent 100%)}
 .spotlight .banner-vignette-top{position:absolute;top:0;left:0;right:0;height:30%;background:linear-gradient(to bottom,rgba(${rgb.r},${rgb.g},${rgb.b},.85) 0%,rgba(${rgb.r},${rgb.g},${rgb.b},.6) 30%,rgba(${rgb.r},${rgb.g},${rgb.b},.3) 60%,transparent 100%);pointer-events:none;z-index:6}
 .spotlight .banner-vignette-bottom{position:absolute;bottom:0;left:0;right:0;height:30%;background:linear-gradient(to top,rgba(${rgb.r},${rgb.g},${rgb.b},.85) 0%,rgba(${rgb.r},${rgb.g},${rgb.b},.6) 30%,rgba(${rgb.r},${rgb.g},${rgb.b},.3) 60%,transparent 100%);pointer-events:none;z-index:6}
-.spotlight .banner-info-backdrop{position:absolute;left:0;top:0;width:100%;height:100%;z-index:8;pointer-events:none;background:rgba(${rgb.r},${rgb.g},${rgb.b},.15);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);opacity:0;transition:opacity .3s ease}
-.spotlight .banner-item:hover .banner-info-backdrop{opacity:1}
+.spotlight .banner-info-backdrop{position:absolute;left:0;top:0;width:100%;height:100%;z-index:8;pointer-events:none;background:rgba(${rgb.r},${rgb.g},${rgb.b},.2);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);opacity:0;transition:opacity .3s ease}
+.spotlight .banner-item.show-overview .banner-info-backdrop{opacity:1}
 .spotlight .banner-logo{position:absolute;left:50%;top:45%;transform:translate(-50%,-50%);max-width:60%;max-height:50%;object-fit:contain;z-index:15;filter:drop-shadow(0 6px 20px rgba(0,0,0,.95)) drop-shadow(0 0 40px rgba(0,0,0,.6));pointer-events:auto;cursor:pointer;transition:transform .5s ease,opacity .3s ease}
 .spotlight-container:hover .banner-logo{transform:translate(-50%,-50%) scale(1.1)}
 .spotlight .banner-logo.hidden{opacity:0;pointer-events:none}
@@ -399,22 +399,47 @@ async function fetchStandardItems(apiClient) {
     } catch (e) { return []; }
 }
 
-function navigateToGenre(genre, apiClient) {
+async function navigateToGenre(genre, apiClient) {
     try {
         const sid = apiClient.serverId || apiClient.serverInfo?.Id || apiClient._serverInfo?.Id;
         const parentId = CONFIG.collectionId || CONFIG.libraryId || '';
-        let url = '/web/index.html#!/itemlist.html?genres=' + encodeURIComponent(genre);
-        if (parentId) url += '&parentId=' + parentId;
+        const userId = apiClient.getCurrentUserId();
+
+        // Fetch the genre ID from Emby API
+        let genreId = null;
+        try {
+            const genresUrl = apiClient.getUrl('Genres', { ParentId: parentId, UserId: userId });
+            const response = await apiClient.ajax({ type: 'GET', url: genresUrl }, apiClient);
+            const data = JSON.parse(response);
+            const found = (data.Items || []).find(g => g.Name === genre);
+            if (found) genreId = found.Id;
+        } catch (e) {
+            console.warn('[SpotlightPro] Failed to fetch genre ID for', genre, e);
+        }
+
+        if (!genreId) {
+            console.warn('[SpotlightPro] Genre ID not found for', genre);
+            return;
+        }
+
+        // Build the correct Emby URL: #!/list/list.html?genreId=xxx&serverId=xxx&parentId=xxx
+        let url = '/web/index.html#!/list/list.html?genreId=' + genreId;
         if (sid) url += '&serverId=' + sid;
-        // Use full navigation — Emby's SPA router doesn't process hash changes
-        // for genre filters reliably, so we do a real page navigation
+        if (parentId) url += '&parentId=' + parentId;
         window.location.href = url;
     } catch (e) { console.warn('[SpotlightPro] Genre navigation failed:', e); }
 }
 
-function pickKenBurnsClass() {
-    if (!CONFIG.enableKenBurns) return 'kb-zoom';
-    const variants = ['kb-tl', 'kb-tr', 'kb-bl', 'kb-br'];
+function pickKenBurnsStyle() {
+    if (!CONFIG.enableKenBurns) {
+        return { name: 'kb-zoom', css: `zoomOut ${CONFIG.autoplayInterval}ms ease-out forwards` };
+    }
+    const variants = [
+        { name: 'kb-tl', css: `kenBurnsTL ${CONFIG.autoplayInterval}ms ease-out forwards` },
+        { name: 'kb-tr', css: `kenBurnsTR ${CONFIG.autoplayInterval}ms ease-out forwards` },
+        { name: 'kb-bl', css: `kenBurnsBL ${CONFIG.autoplayInterval}ms ease-out forwards` },
+        { name: 'kb-br', css: `kenBurnsBR ${CONFIG.autoplayInterval}ms ease-out forwards` }
+    ];
     return variants[Math.floor(Math.random() * variants.length)];
 }
 
@@ -450,7 +475,9 @@ function createBannerElement(item, apiClient) {
     const div = document.createElement("div");
     div.className = "banner-item";
     const img = document.createElement("img");
-    img.className = "banner-cover " + pickKenBurnsClass();
+    const kb = pickKenBurnsStyle();
+    img.className = "banner-cover " + kb.name;
+    img.style.animation = kb.css;
     img.draggable = false; img.alt = item.Name || ""; img.loading = "eager"; img.decoding = "async";
     img.src = getImageUrl(apiClient, item, { width: CONFIG.imageWidth, prefer: "Backdrop" });
     div.appendChild(img);
@@ -579,7 +606,16 @@ function attachSliderBehavior(state, apiClient) {
 
     function triggerKenBurns() {
         const vi = slider.children[currentIndex];
-        if (vi) { const cover = vi.querySelector('.banner-cover'); if (cover) { cover.style.animation = 'none'; void cover.offsetWidth; cover.className = 'banner-cover ' + pickKenBurnsClass(); } }
+        if (vi) {
+            const cover = vi.querySelector('.banner-cover');
+            if (cover) {
+                cover.style.animation = 'none';
+                void cover.offsetWidth;
+                const kb = pickKenBurnsStyle();
+                cover.className = 'banner-cover ' + kb.name;
+                cover.style.animation = kb.css;
+            }
+        }
     }
     function updateFavoriteButton() {
         const vi = slider.children[currentIndex];
@@ -603,7 +639,8 @@ function attachSliderBehavior(state, apiClient) {
     function resetOverviews() {
         slider.querySelectorAll('.banner-item').forEach(item => {
             const o = item.querySelector('.banner-overview'), l = item.querySelector('.banner-logo'), t = item.querySelector('.banner-title'), tg = item.querySelector('.banner-tagline');
-            if (o) o.classList.remove('visible'); if (l) l.classList.remove('hidden'); if (t) t.classList.remove('hidden'); if (tg) tg.classList.remove('hidden');
+            if (o) o.classList.remove('visible'); item.classList.remove('show-overview');
+            if (l) l.classList.remove('hidden'); if (t) t.classList.remove('hidden'); if (tg) tg.classList.remove('hidden');
         });
     }
 
@@ -674,8 +711,8 @@ function attachSliderBehavior(state, apiClient) {
         if (isSwiping) return;
         if (e.target.closest('.arrow') || e.target.closest('.controls') || e.target.closest('.play-button-overlay') || e.target.closest('.favorite-button-overlay') || e.target.closest('.banner-genre')) return;
         const oe = e.target.closest('.banner-overview'), le = e.target.closest('.banner-logo'), te = e.target.closest('.banner-title');
-        if (oe) { const bi = oe.closest('.banner-item'); const o = bi.querySelector('.banner-overview'), l = bi.querySelector('.banner-logo'), t = bi.querySelector('.banner-title'), tg = bi.querySelector('.banner-tagline'); if (o) o.classList.remove('visible'); if (l) l.classList.remove('hidden'); if (t) t.classList.remove('hidden'); if (tg) tg.classList.remove('hidden'); return; }
-        if (le || te) { const bi = (le || te).closest('.banner-item'); const o = bi.querySelector('.banner-overview'); if (o) { o.classList.add('visible'); const l = bi.querySelector('.banner-logo'), t = bi.querySelector('.banner-title'), tg = bi.querySelector('.banner-tagline'); if (l) l.classList.add('hidden'); if (t) t.classList.add('hidden'); if (tg) tg.classList.add('hidden'); } return; }
+        if (oe) { const bi = oe.closest('.banner-item'); const o = bi.querySelector('.banner-overview'), l = bi.querySelector('.banner-logo'), t = bi.querySelector('.banner-title'), tg = bi.querySelector('.banner-tagline'); if (o) o.classList.remove('visible'); bi.classList.remove('show-overview'); if (l) l.classList.remove('hidden'); if (t) t.classList.remove('hidden'); if (tg) tg.classList.remove('hidden'); return; }
+        if (le || te) { const bi = (le || te).closest('.banner-item'); const o = bi.querySelector('.banner-overview'); if (o) { o.classList.add('visible'); bi.classList.add('show-overview'); const l = bi.querySelector('.banner-logo'), t = bi.querySelector('.banner-title'), tg = bi.querySelector('.banner-tagline'); if (l) l.classList.add('hidden'); if (t) t.classList.add('hidden'); if (tg) tg.classList.add('hidden'); } return; }
         let node = e.target;
         while (node && node !== slider && !(node.dataset && node.dataset.itemId)) node = node.parentElement;
         if (node?.dataset?.itemId) navigateToItem(node.dataset.itemId, node.dataset.serverId, apiClient);
