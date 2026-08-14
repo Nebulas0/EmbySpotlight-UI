@@ -15,33 +15,6 @@
 (function () {
 'use strict';
 
-// === TV / Remote Control Detection ===
-const IS_TV = (() => {
-    const ua = navigator.userAgent.toLowerCase();
-    const tvSignals = [
-        'tv', 'android tv', 'aftt', 'aftm', 'aftb', 'bravia', 'smart tv',
-        'tizen', 'webos', 'netcast', 'viera', 'freetv', 'googletv',
-        'afttt', 'aftb', 'bentayga', 'aftkrtkt', 'onida tv', 'realme tv',
-        'walton tv', 'skyworth tv', 'mi tv', 'l9 pro tv', 'tcl tv'
-    ];
-    if (tvSignals.some(s => ua.includes(s))) return true;
-    // Also check for large screen with no touch and low pixel ratio (typical TV)
-    const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-    const largeScreen = window.screen.width >= 1280 && window.screen.height >= 720;
-    const lowDPR = window.devicePixelRatio <= 1.5;
-    // Emby Android TV app user agent
-    if (ua.includes('emby') && ua.includes('android')) return true;
-    return !hasTouch && largeScreen && lowDPR && ua.includes('android');
-})();
-
-// TV-specific overrides: disable heavy animations for smoother playback
-if (IS_TV) {
-    CONFIG.enableKenBurns = false;
-    CONFIG.enableCrossfade = false;
-    CONFIG.enableBlurBackdrop = false;
-    CONFIG.crossfadeDuration = 0;
-    CONFIG.autoplayInterval = 10000; // Slower on TV for readability
-}
 const CONFIG = {
     imageWidth: 1280,
     preloadWidth: 1280,
@@ -74,7 +47,6 @@ const CONFIG = {
     enableTrailers: true,
     trailerStartMuted: false
 };
-
 
 // Load YouTube IFrame Player API once
 let ytApiReady = typeof window.YT !== 'undefined' && window.YT.Player;
@@ -326,13 +298,6 @@ function insertStyles() {
 .spotlight .trailer-seek-fill{height:100%;width:0%;background:#ff0000;transition:width .1s linear}
 .spotlight .trailer-seek-bar:hover .trailer-seek-fill{background:#ff3333}
 .spotlight .trailer-seek-bar.touch-visible{opacity:1}
-/* TV focus styles */
-.spotlight.is-tv .play-button,.spotlight.is-tv .favorite-button,.spotlight.is-tv .trailer-button,.spotlight.is-tv .trailer-control-btn,.spotlight.is-tv .arrow{opacity:1 !important;pointer-events:auto !important}
-.spotlight.is-tv .play-button-overlay,.spotlight.is-tv .favorite-button-overlay,.spotlight.is-tv .trailer-button-overlay{opacity:1 !important;pointer-events:auto !important}
-.spotlight.is-tv .play-button:focus,.spotlight.is-tv .favorite-button:focus,.spotlight.is-tv .trailer-button:focus,.spotlight.is-tv .trailer-control-btn:focus,.spotlight.is-tv .arrow:focus{outline:3px solid #fff;outline-offset:4px}
-.spotlight.is-tv .play-button:focus-visible,.spotlight.is-tv .favorite-button:focus-visible,.spotlight.is-tv .trailer-button:focus-visible,.spotlight.is-tv .trailer-control-btn:focus-visible,.spotlight.is-tv .arrow:focus-visible{outline:3px solid #fff;outline-offset:4px}
-.spotlight.is-tv .banner-cover{transition:none !important;animation:none !important}
-.spotlight.is-tv .banner-slider{transition:transform .2s ease !important}
 .spotlight .trailer-controls .trailer-control-btn:hover{background:rgba(255,255,255,.2)}
 .spotlight .banner-item.show-trailer .banner-logo,
 .spotlight .banner-item.show-trailer .banner-info,
@@ -698,7 +663,7 @@ function buildSlider(items, apiClient) {
     const container = document.createElement("div");
     container.className = `spotlight-container spotlight-pro ${SPOTLIGHT_CONTAINER_CLASS}`;
     const spotlight = document.createElement("div");
-    spotlight.className = "spotlight" + (IS_TV ? " is-tv" : "");
+    spotlight.className = "spotlight";
     const loader = document.createElement("div");
     loader.className = "loader"; loader.innerHTML = "Loading…";
     spotlight.appendChild(loader);
@@ -715,11 +680,11 @@ function buildSlider(items, apiClient) {
         slider.appendChild(first); slider.insertBefore(last, slider.children[0]);
     }
     sliderWrapper.appendChild(slider); spotlight.appendChild(sliderWrapper);
-    const btnLeft = document.createElement("button"); btnLeft.setAttribute("tabindex", "0");
+    const btnLeft = document.createElement("button");
     btnLeft.className = "arrow left";
     btnLeft.innerHTML = `<svg width="60" height="60" viewBox="0 0 24 24" fill="white"><path d="M15.41,16.58L10.83,12L15.41,7.41L14,6L8,12L14,18L15.41,16.58Z"/></svg>`;
     btnLeft.setAttribute("aria-label", "Previous");
-    const btnRight = document.createElement("button"); btnRight.setAttribute("tabindex", "0");
+    const btnRight = document.createElement("button");
     btnRight.className = "arrow right";
     btnRight.innerHTML = `<svg width="60" height="60" viewBox="0 0 24 24" fill="white"><path d="M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z"/></svg>`;
     btnRight.setAttribute("aria-label", "Next");
@@ -759,15 +724,15 @@ function buildSlider(items, apiClient) {
     spotlight.appendChild(controlsWrapper);
     const trailerControls = document.createElement("div");
     trailerControls.className = "trailer-controls";
-    const unmuteBtn = document.createElement("button"); unmuteBtn.setAttribute("tabindex", "0");
+    const unmuteBtn = document.createElement("button");
     unmuteBtn.className = "trailer-control-btn unmute-btn";
     unmuteBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M3,9V15H7L12,20V4L7,9H3M16.5,12C16.5,10.83 15.92,9.79 15,9.14V14.86C15.92,14.21 16.5,13.17 16.5,12M14,3.23V5.29C16.89,6.15 19,8.83 19,12C19,15.17 16.89,17.85 14,18.71V20.77C18,19.86 21,16.28 21,12C21,7.72 18,4.14 14,3.23Z"/></svg>`;
     unmuteBtn.setAttribute("aria-label", "Mute"); unmuteBtn.title = "Mute";
-    const fullscreenBtn = document.createElement("button"); fullscreenBtn.setAttribute("tabindex", "0");
+    const fullscreenBtn = document.createElement("button");
     fullscreenBtn.className = "trailer-control-btn fullscreen-btn";
     fullscreenBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M5,5H10V7H7V10H5V5M14,5H19V10H17V7H14V5M19,14V19H14V17H17V14H19M10,19H5V14H7V17H10V19Z"/></svg>`;
     fullscreenBtn.setAttribute("aria-label", "Fullscreen"); fullscreenBtn.title = "Fullscreen";
-    const closeTrailerBtn = document.createElement("button"); closeTrailerBtn.setAttribute("tabindex", "0");
+    const closeTrailerBtn = document.createElement("button");
     closeTrailerBtn.className = "trailer-control-btn close-trailer-btn";
     closeTrailerBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"/></svg>`;
     closeTrailerBtn.setAttribute("aria-label", "Close Trailer"); closeTrailerBtn.title = "Close Trailer";
@@ -1106,13 +1071,6 @@ function attachSliderBehavior(state, apiClient) {
     if (trailerBtnOverlay) trailerBtnOverlay.addEventListener("click", (e) => { e.stopPropagation(); if (trailerActive) stopTrailer(); else startTrailer(); });
     if (state.unmuteBtn) state.unmuteBtn.addEventListener("click", (e) => { e.stopPropagation(); toggleTrailerMute(); });
     if (state.closeTrailerBtn) state.closeTrailerBtn.addEventListener("click", (e) => { e.stopPropagation(); stopTrailer(); });
-    // TV: pause autoplay when any button gains focus
-    if (IS_TV) {
-        const allButtons = spotlight.querySelectorAll('button');
-        allButtons.forEach(btn => {
-            btn.addEventListener('focus', () => { if (!trailerActive) { stopAutoplay(); stopProgress(); } });
-        });
-    }
     if (state.seekBar) state.seekBar.addEventListener("click", (e) => { e.stopPropagation(); if (!trailerPlayer || trailerDuration <= 0) return; const rect = state.seekBar.getBoundingClientRect(); const pct = (e.clientX - rect.left) / rect.width; const time = pct * trailerDuration; try { trailerPlayer.seekTo(time, true); } catch (err) {} });
     // Mobile: show seek bar on touch, hide after 3 seconds
     let seekBarHideTimer = null;
@@ -1139,95 +1097,14 @@ function attachSliderBehavior(state, apiClient) {
 
     let keyboardHandler = null;
     if (CONFIG.enableKeyboard) {
-        // TV focus navigation: track which element is focused
-        let tvFocusIndex = 0; // 0=play, 1=trailer, 2=favorite, 3=prev, 4=next
-        const tvFocusableElements = () => {
-            const els = [];
-            const pb = spotlight.querySelector('.play-button');
-            const tb = spotlight.querySelector('.trailer-button');
-            const fb = spotlight.querySelector('.favorite-button');
-            const bl = spotlight.querySelector('.arrow.left');
-            const br = spotlight.querySelector('.arrow.right');
-            // Only include visible elements
-            if (pb && pb.parentElement.style.display !== 'none') els.push(pb);
-            if (tb && tb.parentElement.style.display !== 'none') els.push(tb);
-            if (fb) els.push(fb);
-            if (bl) els.push(bl);
-            if (br) els.push(br);
-            return els;
-        };
-        const trailerFocusableElements = () => {
-            const els = [];
-            if (state.unmuteBtn) els.push(state.unmuteBtn);
-            if (state.fullscreenBtn) els.push(state.fullscreenBtn);
-            if (state.closeTrailerBtn) els.push(state.closeTrailerBtn);
-            return els;
-        };
-        function focusTVElement(idx, els) {
-            if (!els || els.length === 0) return;
-            if (idx < 0) idx = els.length - 1;
-            if (idx >= els.length) idx = 0;
-            tvFocusIndex = idx;
-            els[idx].focus();
-        }
         keyboardHandler = (e) => {
             const rect = container.getBoundingClientRect();
             if (rect.bottom < 0 || rect.top > window.innerHeight) return;
-            
-            // Escape / Back button — always closes trailer first
-            if (e.key === 'Escape' || e.key === 'Back' || e.keyCode === 27) {
-                if (trailerActive) { e.preventDefault(); stopTrailer(); return; }
-            }
-            
-            if (trailerActive) {
-                // Trailer mode: navigate between trailer controls
-                const tEls = trailerFocusableElements();
-                if (e.key === 'ArrowLeft') { e.preventDefault(); focusTVElement(tvFocusIndex - 1, tEls); }
-                else if (e.key === 'ArrowRight') { e.preventDefault(); focusTVElement(tvFocusIndex + 1, tEls); }
-                else if (e.key === 'ArrowUp') { e.preventDefault(); focusTVElement(0, tEls); }
-                else if (e.key === 'ArrowDown') { e.preventDefault(); focusTVElement(tEls.length - 1, tEls); }
-                else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); document.activeElement.click(); }
-                return;
-            }
-            
-            // Spotlight mode
             if (e.key === 'ArrowLeft') { e.preventDefault(); currentIndex--; animate(); }
             else if (e.key === 'ArrowRight') { e.preventDefault(); currentIndex++; animate(); }
-            else if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                if (IS_TV) {
-                    // On TV: Enter on focused element, or start trailer if available
-                    const focused = document.activeElement;
-                    if (focused && spotlight.contains(focused) && focused.tagName === 'BUTTON') {
-                        focused.click();
-                    } else {
-                        // No button focused — try to play trailer
-                        const vi = slider.children[currentIndex];
-                        if (vi?.dataset?.trailerId) startTrailer();
-                    }
-                } else {
-                    if (autoplayTimer) stopAutoplay(); else startAutoplay();
-                }
-            }
-            else if (e.key === 'ArrowUp' && IS_TV) {
-                e.preventDefault();
-                const els = tvFocusableElements();
-                focusTVElement(tvFocusIndex, els);
-            }
-            else if (e.key === 'ArrowDown' && IS_TV) {
-                e.preventDefault();
-                const els = tvFocusableElements();
-                focusTVElement(tvFocusIndex, els);
-            }
+            else if (e.key === ' ') { e.preventDefault(); if (trailerActive) { stopTrailer(); } else if (autoplayTimer) stopAutoplay(); else startAutoplay(); }
         };
         document.addEventListener("keydown", keyboardHandler);
-        // On TV: auto-focus the play button when spotlight loads
-        if (IS_TV) {
-            setTimeout(() => {
-                const pb = spotlight.querySelector('.play-button');
-                if (pb) pb.focus();
-            }, 500);
-        }
     }
 
     startAutoplay();
