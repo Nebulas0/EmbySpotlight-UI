@@ -1,84 +1,162 @@
+# EmbySpotlight-UI
 
-# EmbySpotlight
+Netflix-style spotlight slider for Emby Server, loaded via the
+[Emby.CustomCssJS](https://github.com/MediaBrowser/Emby.Plugins) plugin.
 
-A Spotlight banner for Emby Media Server
+## Files
 
-<img alt="image" src="https://github.com/user-attachments/assets/1d59d591-ef84-4b6b-b393-56e87c122c40" />
+| File | Description |
+|------|-------------|
+| `SpotlightPro.js` | Base spotlight implementation (no trailer support) |
+| `SpotlightPro-trailer.js` | Full version with inline YouTube trailer player, TV/remote support, custom seek bar |
+| `SpotlightPro-trailer-notv.js` | Backup of the trailer version before TV support was added |
+| `Spotlight.js` | Original simple spotlight (legacy) |
+| `TV_KEYBOARD_FIX.md` | Notes for future TV keyboard handling fix |
 
+## Features
 
-### First and foremost:
-- This is vibe-coded with the help of Claude Sonnet 4.5 and just a proof of concept
-- Tested with stable Server 4.9.X.X on a 1080p-Screen
-- This Banner just works on the Web Client
-- Big thanks to @Druidblack for the ratings codebase (https://github.com/Druidblack/jellyfin_ratings)
+### Spotlight
+- Randomized initial load from large Emby libraries (single API query with random startIndex)
+- Year-descending sort + random window selection
+- Excludes watched items (`IsPlayed: false`)
+- Background batch fetching (250 items per batch)
+- Preload next group near end of current group
+- Cycle through additional items (no repeats)
+- Progressive image loading (800px first, upgrades to 1280px)
+- Slide counter (e.g. "3 / 10")
+- Dot navigation indicators
+- Autoplay with configurable interval
+- Progress bar showing autoplay timing
 
+### Visual Enhancements
+- Ken Burns effect (randomized pan + zoom) — disabled on TV
+- Frosted glass blur behind info text — disabled on TV
+- Crossfade transitions between batch swaps — disabled on TV
+- Clickable genre chips
+- Play button (links to Emby item page)
+- Favorite button (toggles favorite state)
+- Logo/title/overview/tagline with show/hide on click
 
-## Installation
+### Trailer Player (SpotlightPro-trailer.js)
+- Trailer button only shown when current item has `RemoteTrailers` metadata
+- Button visibility updates per-slide (not just first load)
+- Inline YouTube playback using the **YouTube IFrame Player API**
+- Replaces the spotlight backdrop when playing
+- Hides logo, info, gradients, overlays, and spotlight buttons during playback
+- Custom controls (top-right, show on hover):
+  - Mute / Unmute
+  - Fullscreen
+  - Close (X)
+- Custom seek bar (red, bottom of trailer):
+  - Polls `getCurrentTime()` / `getDuration()` every 250ms
+  - Click/tap to seek via `seekTo()`
+  - Desktop: shows on hover
+  - Mobile: shows on touch, auto-hides after 3 seconds
+- YouTube's own controls hidden (`controls=0`, `iv_load_policy=3`, `fs=0`)
+- Contain mode: iframe fills container, YouTube handles 16:9 letterboxing
+- Auto-stop when trailer ends (`onStateChange` state 0)
+- Autoplay and progress bar paused during trailer, resumed on close
+- Trailer stopped on slide change and spotlight cleanup
+- Per-user enable/disable via `localStorage` key `spotlight-trailers-enabled`
 
- 1. Download [Spotlight.js](https://github.com/v1rusnl/EmbySpotlight/blob/main/Spotlight.js) and optionally [spotlight-items.txt](https://github.com/v1rusnl/EmbySpotlight/blob/main/spotlight-items.txt), if you want to decide which items you want to present to users
- 
- 2. Fill out Confguration (line 56-129)
- - Paste your API keys -  min. MDBList key is mandatory to get most ratings (except Allocine); if no key is used, leave the value field empty
- - Enable the Rating providers you'd like to see
- - Set Ratings cache duration to minimize API calls and instant Rating load time when revisiting items -> default=168h (1 Week)
- - For Allociné in general and Rotten Tomatoes "Verified Hot" Badge to work automatically, you need a reliant CORS proxy, e.g. https://github.com/obeone/simple-cors-proxy and you need to set its base URL. The reasons are that Allociné has no API and the RT "Verified Hot" badge is also present on movies with a Popcornmeter <90 + not available via MDBList API. Also MDBList API does not provide Rating on some older movies for RT. If you do not want a CORS Proxy, you will get no Allociné and missing some RT ratings. Also the automatic RT "Verified Hot" badge will be based on simple math (Popcornmeter >89 + min. 500 verified Ratings). If you choose to use the script without CORS Proxy, you can set manual overrides for false negatives in RT "Cerified Fresh" and "Verified Hot" status by adding the TMDB-ID in line 255 ff. (e.g. an Item should be "Verified Hot" but has a Rating below 90)
- 
- 3. Change the other visual configuration values to your needs:
- 
- - limit: The amount of items from 100 latest the plugin shows in Spotlight in random order
- 
- ```
- default = 10 items
- ```
+### TV / Remote Control Support
+- Auto-detects TV via user agent (Android TV, Tizen, webOS, Bravia, etc.)
+- Disables heavy animations (Ken Burns, crossfade, blur) for smoother playback
+- D-pad navigation:
+  - Left/Right: navigate slides (spotlight) or controls (trailer)
+  - Up/Down: move focus between buttons
+  - Enter/OK: activate focused button or play trailer
+  - Escape/Back: close trailer first
+- All buttons get `tabindex=0` and white focus outline
+- Buttons always visible on TV (no hover)
+- Auto-focus play button on load
+- Autoplay pauses when button is focused, resumes on blur
+- See `TV_KEYBOARD_FIX.md` for future keyboard handling improvements
 
- - autoplayInterval: The amount of time how long an item is presented by Spotlight if it has no Trailer (see enableVideoBackdrop and waitForTrailerToEnd variable)
+### Mobile Responsive
+- Buttons shrink to 40px, positioned at corners
+- Buttons always visible (no hover on mobile)
+- Spotlight container 94% width with border radius
+- Banner height adjusted for small screens
+- Genre/meta text scaled down
+- Trailer controls always visible when playing
+- Seek bar shows on touch, auto-hides after 3 seconds
+- Touch swipe navigation
 
- ```
- default = 10000ms (10s)
- ```
+## Configuration
 
- - vignetteColorTop/Bottom/Left/Right: The gradient/vignette color at the inside edges of the spotlight; can be any supported value of: 
- 
+Key config values in `SpotlightPro-trailer.js`:
+
+```javascript
+imageWidth: 1280,          // Full-res image width
+preloadWidth: 1280,        // Preload image width
+limit: 10,                 // Items per group
+autoplayInterval: 8000,    // Slide duration (10000 on TV)
+libraryId: 2310256,        // Emby library ID
+spotlightBatchSize: 250,   // Background batch size
+unplayedOnly: true,        // Exclude watched items
+enablePreloading: true,    // Preload next group
+enableKenBurns: true,      // Pan+zoom effect (false on TV)
+enableBlurBackdrop: true,  // Frosted glass (false on TV)
+enableCrossfade: true,     // Transition effect (false on TV)
+enableTrailers: true,      // Trailer button + player
+trailerStartMuted: false,  // Start trailers muted
 ```
-HEX: "#0000000" -> Emby Themes: Dark = #1e1e1e; Black = #000000; Light = #ffffff; Finimalism inspired = #0a0515; for other gradient themes like AppleTV or Blue Radiance take e.g. Windows Color Picker (WIN+SHIFT+C) and choose a color on the screen that makes you happy
+
+## Deployment
+
+### Via Emby.CustomCssJS plugin
+1. Copy the JS content into a CustomCssJS JavaScript entry named `spotlight-pro-trailer`
+2. Ensure XML-escaping: `&&` → `&amp;&amp;`, `<` → `&lt;`, `>` → `&gt;`, `&` → `&amp;`
+3. Restart Emby to reload the plugin configuration
+4. Hard-refresh the Emby web client
+
+### Direct XML deployment
+The XML config file is at:
+`/config/plugins/configurations/Emby.CustomCssJS.xml` (inside the Emby container)
+
+## Architecture
+
 ```
- 
- - playbuttonColor: controls the color of the play button when hovering over it and can be any valid value. e.g.:
- 
- ```
- HEX: "#0000000"
- rgb: "rgb(20 170 223)"
- rgba: "rgba(20 170 223, 0.2)"
- No color: "none"
- Emby accent color: "hsl(var(--theme-primary-color-hue), var(--theme-primary-color-saturation), var(--theme-primary-color-lightness))"
- Finimalism Inspired: "var(--theme-primary-color)"
- ```
- 
- - enableVideoBackdrop: true|false -> enables/disbales Trailer playback
- 
- - startMuted: true|false -> controls if Trailers start muted or not
- 
- - videoVolume: Audio Volume of Trailers
- 
- - waitForTrailerToEnd: true|false -> Respect autoplayInterval even an item has a Trailer
- 
- - enableMobileVideo: true|false -> Enables Trailer playback in mobile views
- 
- - preferredVideoQuality: hd720|hd1080|highres -> Video Quality of Trailer playback, hd720 should be sufficient in most cases due to image masking
- 
- - enableSponsorBlock: true|false -> Enable SponsorBlock api; NOTE: You need to have installed the Sponsorblock browser extension
- 
- - RATING_COLORS: change the background color for age ratings
- 
- 3. Optional: Add IDs of the items you want to present into spotlight-items.txt like this (nested IDs like Collectiond are supported):
- <img width="326" height="155" alt="image" src="https://github.com/user-attachments/assets/6f48bf50-7477-4378-af0c-6f4f1f9064ee" />
+MQTT event → ZenLocalPoller → rclone cache refresh
+  → Autoscan (unionfs path) → Emby scan
+  → strm-bridge → STRM sync → Autoscan (strm path) → Emby scan
 
- 4. Paste modified Spotlight.js (and optional spotlight-items.txt) inside /system/dashboard-ui/ (Windows) or your OS equivalent
- 
- 5. Add ```<script src="Spotlight.js" defer></script>``` before ```</body>``` tag at the end of /system/dashboard-ui/index.html
- 
- 6. Hard reload Emby Web
+SpotlightPro-trailer.js (this repo)
+  → Emby.CustomCssJS plugin → Emby web client
+  → Fetches items from Emby API
+  → Displays spotlight slider with trailers
+```
 
-## License
+## AI Notes
 
-[MIT](https://github.com/v1rusnl/EmbySpotlight/blob/main/LICENSE)
+### How the trailer system works
+1. `buildQuery()` includes `RemoteTrailers` in the Emby API fields
+2. `createBannerElement()` extracts the YouTube video ID from `RemoteTrailers[0].Url`
+3. The video ID is stored in `dataset.trailerId` on the banner item
+4. `updateTrailerButtonVisibility()` checks `dataset.trailerId` and shows/hides the trailer button
+5. `startTrailer()` creates a `YT.Player` instance using the YouTube IFrame Player API
+6. `onReady` sets mute/volume and starts seek bar polling
+7. `onStateChange` detects when the trailer ends (state 0) and calls `stopTrailer()`
+8. `stopTrailer()` destroys the player, removes the iframe, and resumes autoplay
+
+### YouTube IFrame Player API
+- Loaded via `https://www.youtube.com/iframe_api` on script init
+- `YT.Player` replaces the trailer-container element with an iframe
+- Provides proper methods: `mute()`, `unMute()`, `setVolume()`, `getDuration()`, `getCurrentTime()`, `seekTo()`, `destroy()`
+- Fallback to simple iframe embed if API not yet loaded (first load)
+
+### Performance optimizations
+- Single API query with random startIndex (no double fetch)
+- Progressive image loading (800px first, 1280px upgrade)
+- Skip `preloadImages()` for initial load (progressive loading in DOM)
+- Reduced image width (1280px vs 1900px)
+- Background batch fetching (250 items, async)
+- Preload next group at slide 8
+
+### Known limitations
+- YouTube `showinfo=0` is deprecated (2018) — video title may still show
+- YouTube `controls=0` hides all native controls — custom seek bar required
+- Contain mode may show black bars (16:9 vs spotlight aspect ratio)
+- TV keyboard handling may conflict with Emby's own handlers (see `TV_KEYBOARD_FIX.md`)
+- `YT.Player` sets inline width/height on iframe — overridden with `!important` CSS and `onReady` style reset
