@@ -237,7 +237,7 @@ function insertStyles() {
 
 /* === Mobile Responsive === */
 @media (max-width:768px),(orientation:portrait){
-    .spotlight-container.spotlight-pro{width:100% !important;margin-top:8rem !important;margin-bottom:-6rem !important;border-radius:0 !important;margin-left:0 !important;margin-right:0 !important}
+    .spotlight-container.spotlight-pro{width:94% !important;margin-top:8rem !important;margin-bottom:-6rem !important;border-radius:.5rem !important}
     .spotlight .banner-slider-wrapper{border-radius:0 !important}
     .spotlight .banner-cover{height:min(50vmax,38vh) !important}
     .spotlight .play-button-overlay{top:.5rem !important;right:.5rem !important;left:auto !important;bottom:auto !important;opacity:1 !important;pointer-events:auto !important}
@@ -270,9 +270,9 @@ function insertStyles() {
 .spotlight .trailer-button{width:64px;height:64px;border-radius:50%;background:rgba(55,55,55,.3);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.4)}
 .spotlight .trailer-button:hover{transform:scale(1.02);background:${CONFIG.playbuttonColor};box-shadow:0 6px 20px rgba(0,0,0,.5)}
 .spotlight .trailer-button svg{width:28px;height:28px;fill:#fff;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3))}
-.spotlight .trailer-container{position:absolute;top:0;left:0;width:100%;height:100%;z-index:20;opacity:0;pointer-events:none;transition:opacity .4s ease;background:#000;overflow:hidden}
+.spotlight .trailer-container{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:100%;height:100%;z-index:20;opacity:0;pointer-events:none;transition:opacity .4s ease;background:#000;overflow:hidden}
 .spotlight .trailer-container.active{opacity:1;pointer-events:auto}
-.spotlight .trailer-iframe{width:100%;height:100%;border:none;display:block;position:absolute;top:0;left:0}
+.spotlight .trailer-iframe{width:100%;height:100%;border:none;display:block;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)}
 .spotlight .trailer-controls{position:absolute;top:2rem;left:2rem;z-index:30;display:flex;gap:.8rem;opacity:0;transition:opacity .3s ease;pointer-events:none}
 .spotlight.trailer-playing:hover .trailer-controls{opacity:1;pointer-events:auto}
 .spotlight.trailer-playing .trailer-controls{opacity:1;pointer-events:auto}
@@ -897,7 +897,7 @@ function attachSliderBehavior(state, apiClient) {
 
     btnRight.addEventListener("click", (e) => { e.stopPropagation(); currentIndex++; animate(); });
     btnLeft.addEventListener("click", (e) => { e.stopPropagation(); currentIndex--; animate(); });
-    controls.addEventListener("click", (e) => { e.stopPropagation(); if (e.target.classList.contains("control")) { resetOverviews(); currentIndex = parseInt(e.target.dataset.index, 10); updateTransform(currentIndex, true); setActiveDot(currentIndex); updateFavoriteButton(); updateSlideCounter(); setTimeout(() => { triggerKenBurns(); startProgress(); }, 100); } });
+    controls.addEventListener("click", (e) => { e.stopPropagation(); if (e.target.classList.contains("control")) { resetOverviews(); currentIndex = parseInt(e.target.dataset.index, 10); updateTransform(currentIndex, true); setActiveDot(currentIndex); updateFavoriteButton(); updateSlideCounter(); updateTrailerButtonVisibility(); setTimeout(() => { triggerKenBurns(); startProgress(); }, 100); } });
 
     function animate() {
         if (trailerActive) stopTrailer();
@@ -915,6 +915,7 @@ function attachSliderBehavior(state, apiClient) {
                 setActiveDot(currentIndex);
                 updateFavoriteButton();
                 updateSlideCounter();
+                updateTrailerButtonVisibility();
                 setTimeout(() => { triggerKenBurns(); startProgress(); }, 100);
                 // Trigger preload and swap when ready
                 if (typeof state.preloadNext === 'function') {
@@ -930,7 +931,7 @@ function attachSliderBehavior(state, apiClient) {
         }
 
         // Normal slide navigation
-        resetOverviews(); updateTransform(currentIndex, true); setActiveDot(currentIndex); updateFavoriteButton(); updateSlideCounter();
+        resetOverviews(); updateTransform(currentIndex, true); setActiveDot(currentIndex); updateFavoriteButton(); updateSlideCounter(); updateTrailerButtonVisibility();
         setTimeout(() => { triggerKenBurns(); startProgress(); }, 100);
 
         // Preload next group when 2 slides before cycle end
@@ -939,7 +940,7 @@ function attachSliderBehavior(state, apiClient) {
         // Backward wrap (slide 0 → last slide) — no swap needed
         setTimeout(() => {
             if (currentIndex === 0) {
-                currentIndex = itemsCount; updateTransform(currentIndex, false); setActiveDot(currentIndex); updateFavoriteButton(); updateSlideCounter();
+                currentIndex = itemsCount; updateTransform(currentIndex, false); setActiveDot(currentIndex); updateFavoriteButton(); updateSlideCounter(); updateTrailerButtonVisibility();
                 setTimeout(() => { triggerKenBurns(); startProgress(); }, 100);
             }
         }, 520);
