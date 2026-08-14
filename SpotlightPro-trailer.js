@@ -232,14 +232,14 @@ function insertStyles() {
 @media (max-width:768px),(orientation:portrait){.spotlight .control{display:none}}
 .spotlight .slide-counter{font-size:.95rem;font-weight:600;color:rgba(255,255,255,.7);text-shadow:1px 1px 4px rgba(0,0,0,.9);min-width:3.5rem;text-align:right;pointer-events:none}
 @media (max-width:768px),(orientation:portrait){.spotlight .slide-counter{display:none}}
-.spotlight .progress-bar-container{position:absolute;left:0;bottom:0;width:100%;height:3px;z-index:22;background:rgba(255,255,255,.1);pointer-events:none;border-radius:0 0 .5rem .5rem;overflow:hidden}
+.spotlight .progress-bar-container{position:absolute;left:0;bottom:4rem;width:100%;height:3px;z-index:22;background:rgba(255,255,255,.1);pointer-events:none;overflow:hidden}
 .spotlight .progress-bar-fill{height:100%;width:0%;background:${frameColor};transition:width .1s linear;box-shadow:0 0 8px ${frameColor}}
 
 /* === Mobile Responsive === */
 @media (max-width:768px),(orientation:portrait){
-    .spotlight-container.spotlight-pro{width:100% !important;margin-top:7rem !important;margin-bottom:-5rem !important;border-radius:0 !important}
+    .spotlight-container.spotlight-pro{width:94% !important;margin-top:8rem !important;margin-bottom:-6rem !important;border-radius:.5rem !important}
     .spotlight .banner-slider-wrapper{border-radius:0 !important}
-    .spotlight .banner-cover{height:min(56vmax,40vh) !important}
+    .spotlight .banner-cover{height:min(50vmax,38vh) !important}
     .spotlight .play-button-overlay{top:.5rem !important;right:.5rem !important;left:auto !important;bottom:auto !important;opacity:1 !important;pointer-events:auto !important}
     .spotlight .favorite-button-overlay{top:.5rem !important;left:.5rem !important;right:auto !important;bottom:auto !important;opacity:1 !important;pointer-events:auto !important}
     .spotlight .trailer-button-overlay{top:.5rem !important;right:4rem !important;left:auto !important;bottom:auto !important;opacity:1 !important;pointer-events:auto !important}
@@ -255,10 +255,11 @@ function insertStyles() {
     .spotlight .banner-info-backdrop{backdrop-filter:blur(4px) !important;-webkit-backdrop-filter:blur(4px) !important}
     .spotlight .banner-genre{font-size:clamp(.8rem,2.5vw,1rem) !important;padding:.1rem .5rem !important}
     .spotlight .banner-meta-item{font-size:clamp(.8rem,2.5vw,1rem) !important}
-    .spotlight .trailer-controls{top:.5rem !important;left:.5rem !important;right:auto !important;bottom:auto !important;gap:.4rem !important;opacity:1 !important;pointer-events:auto !important}
+    .spotlight .trailer-controls{top:.5rem !important;left:.5rem !important;right:auto !important;bottom:auto !important;gap:.4rem !important}
+    .spotlight.trailer-playing .trailer-controls{opacity:1 !important;pointer-events:auto !important}
     .spotlight .trailer-control-btn{width:36px !important;height:36px !important}
     .spotlight .trailer-control-btn svg{width:18px !important;height:18px !important}
-    .spotlight .progress-bar-container{height:2px !important}
+    .spotlight .progress-bar-container{height:2px !important;bottom:3rem !important}
     .spotlight .controls-wrapper{right:.5rem !important;bottom:.5rem !important;top:auto !important;left:auto !important}
 }
 
