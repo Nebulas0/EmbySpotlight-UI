@@ -237,7 +237,7 @@ function insertStyles() {
 .spotlight .trailer-button-overlay{position:absolute;top:2rem;right:12rem;z-index:25;opacity:0;transition:opacity .3s ease;pointer-events:none}
 .spotlight-container:hover .trailer-button-overlay{opacity:1;pointer-events:all}
 .spotlight .trailer-button{width:80px;height:80px;border-radius:50%;background:rgba(55,55,55,.3);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.4)}
-.spotlight .trailer-button:hover{transform:scale(1.02);background:${playbuttonColor};box-shadow:0 6px 20px rgba(0,0,0,.5)}
+.spotlight .trailer-button:hover{transform:scale(1.02);background:${CONFIG.playbuttonColor};box-shadow:0 6px 20px rgba(0,0,0,.5)}
 .spotlight .trailer-button svg{width:36px;height:36px;fill:#fff;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3))}
 .spotlight .trailer-button-text{font-size:1.3rem;font-weight:700;color:#fff;text-shadow:2px 2px 8px rgba(0,0,0,.9);max-width:0;overflow:hidden;white-space:nowrap;opacity:0;transition:max-width .3s ease .1s,opacity .3s ease .1s,margin-left .3s ease .1s}
 .spotlight-container:hover .trailer-button-text{max-width:120px;opacity:1;margin-left:.8rem}
