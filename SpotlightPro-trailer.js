@@ -45,7 +45,7 @@ const CONFIG = {
     enablePlayText: false,
     enableGenreClick: true,
     enableTrailers: true,
-    trailerStartMuted: true
+    trailerStartMuted: false
 };
 
 let SPOTLIGHT_INITIALIZED = false;
@@ -239,7 +239,7 @@ function insertStyles() {
 .spotlight .trailer-button{width:80px;height:80px;border-radius:50%;background:rgba(55,55,55,.3);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.4)}
 .spotlight .trailer-button:hover{transform:scale(1.02);background:${CONFIG.playbuttonColor};box-shadow:0 6px 20px rgba(0,0,0,.5)}
 .spotlight .trailer-button svg{width:36px;height:36px;fill:#fff;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3))}
-.spotlight .trailer-container{position:absolute;top:0;left:0;width:100%;height:100%;z-index:5;opacity:0;pointer-events:none;transition:opacity .4s ease;background:#000;overflow:hidden}
+.spotlight .trailer-container{position:absolute;top:0;left:0;width:100%;height:100%;z-index:20;opacity:0;pointer-events:none;transition:opacity .4s ease;background:#000;overflow:hidden}
 .spotlight .trailer-container.active{opacity:1;pointer-events:auto}
 .spotlight .trailer-iframe{width:100%;height:100%;border:none;display:block}
 .spotlight .trailer-controls{position:absolute;bottom:2rem;left:2rem;z-index:30;display:flex;gap:.8rem;opacity:0;transition:opacity .3s ease;pointer-events:none}
@@ -254,10 +254,13 @@ function insertStyles() {
 .spotlight .banner-item.show-trailer .banner-tagline,
 .spotlight .banner-item.show-trailer .banner-overview{opacity:0;pointer-events:none;transition:opacity .4s ease}
 .spotlight .banner-item.show-trailer .banner-logo{z-index:0}
-.spotlight .trailer-container.active ~ .banner-gradient-left,
-.spotlight .trailer-container.active ~ .banner-gradient-right,
-.spotlight .trailer-container.active ~ .banner-vignette-top,
-.spotlight .trailer-container.active ~ .banner-vignette-bottom{opacity:0;transition:opacity .4s ease}
+.spotlight .banner-item.show-trailer ~ .play-button-overlay,
+.spotlight .banner-item.show-trailer ~ .favorite-button-overlay,
+.spotlight .banner-item.show-trailer ~ .trailer-button-overlay{opacity:0;pointer-events:none;transition:opacity .4s ease}
+.spotlight .banner-item.show-trailer .banner-gradient-left,
+.spotlight .banner-item.show-trailer .banner-gradient-right,
+.spotlight .banner-item.show-trailer .banner-vignette-top,
+.spotlight .banner-item.show-trailer .banner-vignette-bottom{opacity:0;transition:opacity .4s ease}
 
 .spotlight .loader{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:30;background:rgba(0,0,0,.3)}
 `;
@@ -665,8 +668,8 @@ function buildSlider(items, apiClient) {
     trailerControls.className = "trailer-controls";
     const unmuteBtn = document.createElement("button");
     unmuteBtn.className = "trailer-control-btn unmute-btn";
-    unmuteBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M12,4L9.91,6.09L12,8.18M4.27,3L3,4.27L7.73,9H3V15H7L12,20V13.27L16.25,17.52C15.59,18 14.84,18.35 14,18.53V20.59C15.28,20.38 16.5,19.9 17.5,19.18L19.73,21.41L21,20.14L4.27,3M19,12C19,12.82 18.86,13.61 18.61,14.34L20.12,15.85C20.68,14.66 21,13.37 21,12C21,7.72 18,4.14 14,3.23V5.29C16.89,6.15 19,8.83 19,12M12,4L9.91,6.09L12,8.18V4Z"/></svg>`;
-    unmuteBtn.setAttribute("aria-label", "Unmute"); unmuteBtn.title = "Unmute";
+    unmuteBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M3,9V15H7L12,20V4L7,9H3M16.5,12C16.5,10.83 15.92,9.79 15,9.14V14.86C15.92,14.21 16.5,13.17 16.5,12M14,3.23V5.29C16.89,6.15 19,8.83 19,12C19,15.17 16.89,17.85 14,18.71V20.77C18,19.86 21,16.28 21,12C21,7.72 18,4.14 14,3.23Z"/></svg>`;
+    unmuteBtn.setAttribute("aria-label", "Mute"); unmuteBtn.title = "Mute";
     const closeTrailerBtn = document.createElement("button");
     closeTrailerBtn.className = "trailer-control-btn close-trailer-btn";
     closeTrailerBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"/></svg>`;
@@ -755,7 +758,7 @@ function attachSliderBehavior(state, apiClient) {
         if (vi) { const tc = vi.querySelector('.trailer-container'); if (tc) tc.classList.remove('active'); vi.classList.remove('show-trailer'); }
         trailerActive = false; trailerMuted = true;
         const ub = state.trailerControls?.querySelector('.unmute-btn');
-        if (ub) { ub.innerHTML = `<svg viewBox="0 0 24 24"><path d="M12,4L9.91,6.09L12,8.18M4.27,3L3,4.27L7.73,9H3V15H7L12,20V13.27L16.25,17.52C15.59,18 14.84,18.35 14,18.53V20.59C15.28,20.38 16.5,19.9 17.5,19.18L19.73,21.41L21,20.14L4.27,3M19,12C19,12.82 18.86,13.61 18.61,14.34L20.12,15.85C20.68,14.66 21,13.37 21,12C21,7.72 18,4.14 14,3.23V5.29C16.89,6.15 19,8.83 19,12M12,4L9.91,6.09L12,8.18V4Z"/></svg>`; ub.title = "Unmute"; }
+        if (ub) { ub.innerHTML = `<svg viewBox="0 0 24 24"><path d="M3,9V15H7L12,20V4L7,9H3M16.5,12C16.5,10.83 15.92,9.79 15,9.14V14.86C15.92,14.21 16.5,13.17 16.5,12M14,3.23V5.29C16.89,6.15 19,8.83 19,12C19,15.17 16.89,17.85 14,18.71V20.77C18,19.86 21,16.28 21,12C21,7.72 18,4.14 14,3.23Z"/></svg>`; ub.title = "Mute"; }
         startAutoplay();
         startProgress();
     }
@@ -784,10 +787,9 @@ function attachSliderBehavior(state, apiClient) {
     function toggleTrailerMute() {
         if (!trailerIframe) return;
         trailerMuted = !trailerMuted;
-        // Use YouTube IFrame API postMessage to unmute/mute without reloading
+        // Try YouTube IFrame API postMessage first
         const cmd = trailerMuted ? 'mute' : 'unMute';
         trailerIframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: cmd, args: [] }), '*');
-        // Also set volume to 100% when unmuting
         if (!trailerMuted) {
             trailerIframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'setVolume', args: [100] }), '*');
         }
@@ -939,8 +941,8 @@ function attachSliderBehavior(state, apiClient) {
 
     function startAutoplay() { if (autoplayTimer) clearInterval(autoplayTimer); isAutoplayPaused = false; resumeProgress(); startProgress(); autoplayTimer = setInterval(() => { currentIndex++; animate(); }, CONFIG.autoplayInterval); }
     function stopAutoplay() { if (autoplayTimer) clearInterval(autoplayTimer); autoplayTimer = null; isAutoplayPaused = true; pauseProgress(); }
-    spotlight.addEventListener("mouseenter", stopAutoplay);
-    spotlight.addEventListener("mouseleave", startAutoplay);
+    spotlight.addEventListener("mouseenter", () => { if (!trailerActive) stopAutoplay(); });
+    spotlight.addEventListener("mouseleave", () => { if (!trailerActive) startAutoplay(); });
 
     let keyboardHandler = null;
     if (CONFIG.enableKeyboard) {
@@ -949,7 +951,7 @@ function attachSliderBehavior(state, apiClient) {
             if (rect.bottom < 0 || rect.top > window.innerHeight) return;
             if (e.key === 'ArrowLeft') { e.preventDefault(); currentIndex--; animate(); }
             else if (e.key === 'ArrowRight') { e.preventDefault(); currentIndex++; animate(); }
-            else if (e.key === ' ') { e.preventDefault(); if (autoplayTimer) stopAutoplay(); else startAutoplay(); }
+            else if (e.key === ' ') { e.preventDefault(); if (trailerActive) { stopTrailer(); } else if (autoplayTimer) stopAutoplay(); else startAutoplay(); }
         };
         document.addEventListener("keydown", keyboardHandler);
     }
