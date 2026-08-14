@@ -164,16 +164,16 @@ function insertStyles() {
 .spotlight-container.spotlight-pro.fade-in{opacity:1}
 .spotlight .play-button-overlay{position:absolute;top:2rem;right:2rem;z-index:25;opacity:0;transition:opacity .3s ease;pointer-events:none;display:flex;align-items:center}
 .spotlight-container:hover .play-button-overlay{opacity:1;pointer-events:all}
-.spotlight .play-button{width:80px;height:80px;border-radius:50%;background:rgba(55,55,55,.3);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.4);flex-shrink:0}
+.spotlight .play-button{width:64px;height:64px;border-radius:50%;background:rgba(55,55,55,.3);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.4);flex-shrink:0}
 .spotlight .play-button:hover{transform:scale(1.02);background:${CONFIG.playbuttonColor};box-shadow:0 6px 20px rgba(0,0,0,.5)}
-.spotlight .play-button svg{width:40px;height:40px;fill:#fff;margin-left:6px;position:relative;left:-2px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3));transition:filter .3s ease}
+.spotlight .play-button svg{width:32px;height:32px;fill:#fff;margin-left:4px;position:relative;left:-2px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3));transition:filter .3s ease}
 .spotlight .play-button:hover svg{filter:drop-shadow(0 3px 6px rgba(0,0,0,.5))}
 .spotlight .favorite-button-overlay{position:absolute;top:2rem;left:2rem;z-index:25;opacity:0;transition:opacity .3s ease;pointer-events:none}
 .spotlight-container:hover .favorite-button-overlay{opacity:1;pointer-events:all}
-.spotlight .favorite-button{width:80px;height:80px;border-radius:50%;background:rgba(55,55,55,.3);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.spotlight .favorite-button{width:64px;height:64px;border-radius:50%;background:rgba(55,55,55,.3);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.4)}
 .spotlight .favorite-button:hover{transform:scale(1.02);background:${CONFIG.favoriteButtonColor};box-shadow:0 6px 20px rgba(0,0,0,.5)}
 .spotlight .favorite-button.is-favorite{background:${CONFIG.favoriteButtonColor}}
-.spotlight .favorite-button svg{width:40px;height:40px;fill:#fff;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3));transition:filter .3s ease}
+.spotlight .favorite-button svg{width:32px;height:32px;fill:#fff;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3));transition:filter .3s ease}
 .spotlight .favorite-button:hover svg{filter:drop-shadow(0 3px 6px rgba(0,0,0,.5))}
 .spotlight .favorite-button.is-favorite svg{fill:#ffcc00}
 .spotlight{position:relative;overflow:visible;width:100%;touch-action:pan-y pinch-zoom}
@@ -234,13 +234,38 @@ function insertStyles() {
 @media (max-width:768px),(orientation:portrait){.spotlight .slide-counter{display:none}}
 .spotlight .progress-bar-container{position:absolute;left:0;bottom:0;width:100%;height:3px;z-index:22;background:rgba(255,255,255,.1);pointer-events:none;border-radius:0 0 .5rem .5rem;overflow:hidden}
 .spotlight .progress-bar-fill{height:100%;width:0%;background:${frameColor};transition:width .1s linear;box-shadow:0 0 8px ${frameColor}}
+
+/* === Mobile Responsive === */
+@media (max-width:768px),(orientation:portrait){
+    .spotlight-container.spotlight-pro{width:100%;margin-top:4rem;margin-bottom:0;border-radius:0}
+    .spotlight .banner-slider-wrapper{border-radius:0}
+    .spotlight .play-button-overlay{top:1rem;right:1rem}
+    .spotlight .favorite-button-overlay{top:1rem;left:1rem}
+    .spotlight .trailer-button-overlay{top:1rem;right:5.5rem}
+    .spotlight .play-button,.spotlight .favorite-button,.spotlight .trailer-button{width:48px;height:48px;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+    .spotlight .play-button svg{width:24px;height:24px;margin-left:3px}
+    .spotlight .favorite-button svg{width:24px;height:24px}
+    .spotlight .trailer-button svg{width:22px;height:22px}
+    .spotlight .arrow{width:36px;height:36px;opacity:.5}
+    .spotlight .arrow svg{width:32px;height:32px}
+    .spotlight .banner-logo{max-width:70%;max-height:35%}
+    .spotlight .banner-title{font-size:clamp(1.2rem,5vw,2rem)}
+    .spotlight .banner-info{left:1rem;bottom:1rem;max-width:85%}
+    .spotlight .banner-info-backdrop{backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+    .spotlight .trailer-controls{bottom:1rem;left:1rem;gap:.5rem}
+    .spotlight .trailer-control-btn{width:40px;height:40px}
+    .spotlight .trailer-control-btn svg{width:20px;height:20px}
+    .spotlight .progress-bar-container{height:2px}
+    .spotlight .controls-wrapper{right:1rem;bottom:1rem}
+}
+
 .spotlight .progress-bar-fill.paused{transition:none}
 /* === Trailer Support === */
-.spotlight .trailer-button-overlay{position:absolute;top:2rem;right:7rem;z-index:25;opacity:0;transition:opacity .3s ease;pointer-events:none}
+.spotlight .trailer-button-overlay{position:absolute;top:2rem;right:6rem;z-index:25;opacity:0;transition:opacity .3s ease;pointer-events:none}
 .spotlight-container:hover .trailer-button-overlay{opacity:1;pointer-events:all}
-.spotlight .trailer-button{width:80px;height:80px;border-radius:50%;background:rgba(55,55,55,.3);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.spotlight .trailer-button{width:64px;height:64px;border-radius:50%;background:rgba(55,55,55,.3);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.4)}
 .spotlight .trailer-button:hover{transform:scale(1.02);background:${CONFIG.playbuttonColor};box-shadow:0 6px 20px rgba(0,0,0,.5)}
-.spotlight .trailer-button svg{width:36px;height:36px;fill:#fff;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3))}
+.spotlight .trailer-button svg{width:28px;height:28px;fill:#fff;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3))}
 .spotlight .trailer-container{position:absolute;top:0;left:0;width:100%;height:100%;z-index:20;opacity:0;pointer-events:none;transition:opacity .4s ease;background:#000;overflow:hidden}
 .spotlight .trailer-container.active{opacity:1;pointer-events:auto}
 .spotlight .trailer-iframe{width:100%;height:100%;border:none;display:block}
@@ -853,7 +878,7 @@ function attachSliderBehavior(state, apiClient) {
         while (controls.firstChild) controls.removeChild(controls.firstChild);
         newItems.forEach((_, i) => { const c = document.createElement("button"); c.className = "control"; if (i === 0) c.classList.add("active"); c.dataset.index = i + 1; c.setAttribute("aria-label", `Slide ${i+1}`); controls.appendChild(c); });
         itemsCount = newItems.length; state.itemsCount = itemsCount; currentIndex = 1;
-        updateTransform(currentIndex, false); setActiveDot(currentIndex); updateFavoriteButton(); updateSlideCounter(); triggerKenBurns();
+        updateTransform(currentIndex, false); setActiveDot(currentIndex); updateFavoriteButton(); updateSlideCounter(); updateTrailerButtonVisibility(); triggerKenBurns();
         isSwapping = false;
         startProgress();
     }
