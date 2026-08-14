@@ -193,8 +193,8 @@ function insertStyles() {
 .spotlight .banner-vignette-bottom{position:absolute;bottom:0;left:0;right:0;height:30%;background:linear-gradient(to top,rgba(${rgb.r},${rgb.g},${rgb.b},.85) 0%,rgba(${rgb.r},${rgb.g},${rgb.b},.6) 30%,rgba(${rgb.r},${rgb.g},${rgb.b},.3) 60%,transparent 100%);pointer-events:none;z-index:6}
 .spotlight .banner-info-backdrop{position:absolute;left:0;top:0;width:100%;height:100%;z-index:8;pointer-events:none;background:rgba(${rgb.r},${rgb.g},${rgb.b},.2);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);opacity:0;transition:opacity .3s ease}
 .spotlight .banner-item.show-overview .banner-info-backdrop{opacity:1}
-.spotlight .banner-logo{position:absolute;left:50%;top:45%;transform:translate(-50%,-50%);max-width:60%;max-height:50%;object-fit:contain;z-index:15;filter:drop-shadow(0 6px 20px rgba(0,0,0,.95)) drop-shadow(0 0 40px rgba(0,0,0,.6)) drop-shadow(0 0 2px rgba(255,255,255,.9)) drop-shadow(0 0 8px rgba(255,255,255,.5)) drop-shadow(0 0 20px rgba(255,255,255,.25));pointer-events:auto;cursor:pointer;transition:transform .5s ease,opacity .3s ease,filter .3s ease}
-.spotlight-container:hover .banner-logo{transform:translate(-50%,-50%) scale(1.1);filter:drop-shadow(0 8px 24px rgba(0,0,0,.95)) drop-shadow(0 0 40px rgba(0,0,0,.6)) drop-shadow(0 0 3px rgba(255,255,255,1)) drop-shadow(0 0 12px rgba(255,255,255,.7)) drop-shadow(0 0 28px rgba(255,255,255,.4))}
+.spotlight .banner-logo{position:absolute;left:50%;top:45%;transform:translate(-50%,-50%);max-width:60%;max-height:50%;object-fit:contain;z-index:15;filter:drop-shadow(0 6px 20px rgba(0,0,0,.95)) drop-shadow(0 0 40px rgba(0,0,0,.6)) drop-shadow(0 0 4px rgba(255,255,255,1)) drop-shadow(0 0 12px rgba(255,255,255,.8)) drop-shadow(0 0 30px rgba(255,255,255,.5)) brightness(1.15) contrast(1.05);pointer-events:auto;cursor:pointer;transition:transform .5s ease,opacity .3s ease,filter .3s ease}
+.spotlight-container:hover .banner-logo{transform:translate(-50%,-50%) scale(1.1);filter:drop-shadow(0 8px 24px rgba(0,0,0,.95)) drop-shadow(0 0 40px rgba(0,0,0,.6)) drop-shadow(0 0 6px rgba(255,255,255,1)) drop-shadow(0 0 18px rgba(255,255,255,.9)) drop-shadow(0 0 40px rgba(255,255,255,.6)) brightness(1.25) contrast(1.1)}
 .spotlight .banner-logo.hidden{opacity:0;pointer-events:none}
 .spotlight .banner-title{position:absolute;left:50%;top:45%;transform:translate(-50%,-50%);z-index:10;font-size:clamp(1.5rem,3.5vw,3rem);font-weight:700;color:#fff;text-shadow:2px 2px 8px rgba(0,0,0,.9);pointer-events:auto;cursor:pointer;text-align:center;max-width:80%;transition:transform .5s ease,opacity .3s ease}
 .spotlight-container:hover .banner-title{transform:translate(-50%,-50%) scale(1.1)}
@@ -337,11 +337,10 @@ async function fetchItems(apiClient) {
 function getRandomStartIndex(batchSize) {
     const total = STATE.totalRecordCount;
     if (!total || total <= batchSize) return 0;
-    const maxStart = total - batchSize, possible = [];
-    for (let s = 0; s <= maxStart; s += batchSize) if (!STATE.usedStartIndices.has(s)) possible.push(s);
-    if (possible.length === 0) { STATE.usedStartIndices.clear(); for (let s = 0; s <= maxStart; s += batchSize) possible.push(s); }
-    const chosen = possible[Math.floor(Math.random() * possible.length)];
-    STATE.usedStartIndices.add(chosen);
+    const maxStart = total - batchSize;
+    // Use fine-grained random: pick any start from 0 to maxStart
+    // Track used ranges to avoid repeating the same window
+    const chosen = Math.floor(Math.random() * (maxStart + 1));
     return chosen;
 }
 
@@ -404,8 +403,14 @@ function getNextGroupFromPool() {
         fetchBatch(STATE.apiClient, CONFIG.collectionId || CONFIG.libraryId || null);
     }
     if (remaining <= 0) return null;
-    const group = STATE.itemPool.slice(STATE.poolCursor, STATE.poolCursor + CONFIG.limit);
-    STATE.poolCursor += group.length;
+    // Shuffle the remaining pool so each batch is different
+    const available = STATE.itemPool.slice(STATE.poolCursor);
+    const shuffled = shuffleArray(available);
+    const group = shuffled.slice(0, CONFIG.limit);
+    // Remove the selected items from the pool
+    const groupIds = new Set(group.map(i => i.Id));
+    STATE.itemPool = STATE.itemPool.filter(i => !groupIds.has(i.Id) || STATE.itemPool.indexOf(i) < STATE.poolCursor);
+    STATE.poolCursor = STATE.itemPool.length - (available.length - group.length);
     return group;
 }
 
