@@ -272,9 +272,9 @@ function insertStyles() {
 .spotlight .trailer-button{width:64px;height:64px;border-radius:50%;background:rgba(55,55,55,.3);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.4)}
 .spotlight .trailer-button:hover{transform:scale(1.02);background:${CONFIG.playbuttonColor};box-shadow:0 6px 20px rgba(0,0,0,.5)}
 .spotlight .trailer-button svg{width:28px;height:28px;fill:#fff;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3))}
-.spotlight .trailer-container{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:100%;height:100%;z-index:20;opacity:0;pointer-events:none;transition:opacity .4s ease;background:#000;overflow:hidden}
+.spotlight .trailer-container{position:absolute;top:0;left:0;width:100%;height:100%;z-index:20;opacity:0;pointer-events:none;transition:opacity .4s ease;background:#000;overflow:hidden;display:flex;align-items:center;justify-content:center}
 .spotlight .trailer-container.active{opacity:1;pointer-events:auto}
-.spotlight .trailer-iframe{width:100%;height:100%;border:none;display:block;position:absolute;top:0;left:0}
+.spotlight .trailer-iframe{width:100%;height:100%;border:none;display:block}
 .spotlight .trailer-controls{position:absolute;top:2rem;right:2rem;z-index:30;display:flex;gap:.8rem;opacity:0;transition:opacity .3s ease;pointer-events:none}
 .spotlight.trailer-playing:hover .trailer-controls{opacity:1;pointer-events:auto}
 .spotlight.trailer-playing .trailer-controls{opacity:1;pointer-events:auto}
@@ -819,8 +819,6 @@ function attachSliderBehavior(state, apiClient) {
         if (seekPollTimer) { clearInterval(seekPollTimer); seekPollTimer = null; }
         if (state.seekFill) state.seekFill.style.width = '0%';
         trailerDuration = 0;
-        // Remove scale listener
-        const oldScale = trailerIframe?.style.transform;
         const ub = state.trailerControls?.querySelector('.unmute-btn');
         if (ub) { ub.innerHTML = `<svg viewBox="0 0 24 24"><path d="M3,9V15H7L12,20V4L7,9H3M16.5,12C16.5,10.83 15.92,9.79 15,9.14V14.86C15.92,14.21 16.5,13.17 16.5,12M14,3.23V5.29C16.89,6.15 19,8.83 19,12C19,15.17 16.89,17.85 14,18.71V20.77C18,19.86 21,16.28 21,12C21,7.72 18,4.14 14,3.23Z"/></svg>`; ub.title = "Mute"; }
         startAutoplay();
@@ -838,7 +836,7 @@ function attachSliderBehavior(state, apiClient) {
         stopProgress();
         vi.classList.add('show-trailer');
         spotlight.classList.add('trailer-playing');
-        const params = new URLSearchParams({ autoplay: '1', mute: CONFIG.trailerStartMuted ? '1' : '0', controls: '0', modestbranding: '1', rel: '0', playsinline: '1', enablejsapi: '1', iv_load_policy: '3', fs: '0' });
+        const params = new URLSearchParams({ autoplay: '1', mute: CONFIG.trailerStartMuted ? '1' : '0', controls: '0', modestbranding: '1', rel: '0', playsinline: '1', enablejsapi: '1', iv_load_policy: '3', fs: '0', disablekb: '1', showinfo: '0' });
         trailerIframe = document.createElement('iframe');
         trailerIframe.className = 'trailer-iframe';
         trailerIframe.src = `https://www.youtube.com/embed/${trailerId}?${params.toString()}`;
