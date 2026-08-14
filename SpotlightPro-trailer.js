@@ -48,6 +48,18 @@ const CONFIG = {
     trailerStartMuted: false
 };
 
+// Load YouTube IFrame Player API once
+let ytApiReady = typeof window.YT !== 'undefined' && window.YT.Player;
+let ytApiLoading = false;
+function loadYouTubeAPI() {
+    if (ytApiReady || ytApiLoading) return;
+    ytApiLoading = true;
+    const tag = document.createElement('script');
+    tag.src = 'https://www.youtube.com/iframe_api';
+    document.head.appendChild(tag);
+    window.onYouTubeIframeAPIReady = () => { ytApiReady = true; ytApiLoading = false; };
+}
+
 let SPOTLIGHT_INITIALIZED = false;
 let SPOTLIGHT_INSTANCE = null;
 const SPOTLIGHT_CONTAINER_CLASS = 'emby-spotlight-trailer-container';
@@ -272,9 +284,9 @@ function insertStyles() {
 .spotlight .trailer-button{width:64px;height:64px;border-radius:50%;background:rgba(55,55,55,.3);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.4)}
 .spotlight .trailer-button:hover{transform:scale(1.02);background:${CONFIG.playbuttonColor};box-shadow:0 6px 20px rgba(0,0,0,.5)}
 .spotlight .trailer-button svg{width:28px;height:28px;fill:#fff;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3))}
-.spotlight .trailer-container{position:absolute;top:0;left:0;width:100%;height:100%;z-index:20;opacity:0;pointer-events:none;transition:opacity .4s ease;background:#000;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.spotlight .trailer-container{position:absolute;top:0;left:0;width:100%;height:100%;z-index:20;opacity:0;pointer-events:none;transition:opacity .4s ease;background:#000;overflow:hidden}
 .spotlight .trailer-container.active{opacity:1;pointer-events:auto}
-.spotlight .trailer-iframe{width:100%;height:100%;border:none;display:block}
+.spotlight .trailer-iframe{width:100%;height:100%;border:none;display:block;position:absolute;top:0;left:0}
 .spotlight .trailer-controls{position:absolute;top:2rem;right:2rem;z-index:30;display:flex;gap:.8rem;opacity:0;transition:opacity .3s ease;pointer-events:none}
 .spotlight.trailer-playing:hover .trailer-controls{opacity:1;pointer-events:auto}
 .spotlight.trailer-playing .trailer-controls{opacity:1;pointer-events:auto}
@@ -769,8 +781,8 @@ function attachSliderBehavior(state, apiClient) {
     let currentIndex = 1, cyclesCompleted = 0, isSwapping = false;
     let touchStartX = 0, touchStartY = 0, touchEndX = 0, touchEndY = 0, isSwiping = false, swipeStartTime = 0;
     let autoplayTimer = null, progressTimer = null, isAutoplayPaused = false;
-    let trailerActive = false, trailerIframe = null, trailerMuted = true;
-    function onYouTubeMessage(e) { try { if (typeof e.data !== 'string') return; const data = JSON.parse(e.data); if (data.event === 'initialDelivery' && data.info) { trailerIframe?.contentWindow.postMessage(JSON.stringify({ event: 'listening' }), '*'); return; } if (data.event === 'infoDelivery' && data.info) { if (data.info.playerState === 0) stopTrailer(); handleYouTubeInfoDelivery(data.info); } } catch (err) {} }
+    let trailerActive = false, trailerPlayer = null, trailerIframe = null, trailerMuted = true, trailerDuration = 0;
+    let seekPollTimer = null;
 
     function startProgress() {
         if (!progressBarFill || !CONFIG.enableProgressBar) return;
@@ -810,13 +822,13 @@ function attachSliderBehavior(state, apiClient) {
     }
 
     function stopTrailer() {
-        if (trailerIframe) { trailerIframe.src = ''; trailerIframe.remove(); trailerIframe = null; }
+        if (seekPollTimer) { clearInterval(seekPollTimer); seekPollTimer = null; }
+        if (trailerPlayer) { try { trailerPlayer.destroy(); } catch (e) {} trailerPlayer = null; }
+        trailerIframe = null;
         const vi = slider.children[currentIndex];
         if (vi) { const tc = vi.querySelector('.trailer-container'); if (tc) tc.classList.remove('active'); vi.classList.remove('show-trailer'); }
         spotlight.classList.remove('trailer-playing');
         trailerActive = false; trailerMuted = true;
-        window.removeEventListener('message', onYouTubeMessage);
-        if (seekPollTimer) { clearInterval(seekPollTimer); seekPollTimer = null; }
         if (state.seekFill) state.seekFill.style.width = '0%';
         trailerDuration = 0;
         const ub = state.trailerControls?.querySelector('.unmute-btn');
@@ -831,63 +843,88 @@ function attachSliderBehavior(state, apiClient) {
         if (!trailerId) return;
         const tc = vi.querySelector('.trailer-container');
         if (!tc) return;
-        if (trailerIframe) { trailerIframe.src = ''; trailerIframe.remove(); }
+        if (trailerPlayer) { try { trailerPlayer.destroy(); } catch (e) {} trailerPlayer = null; }
         stopAutoplay();
         stopProgress();
         vi.classList.add('show-trailer');
         spotlight.classList.add('trailer-playing');
-        const params = new URLSearchParams({ autoplay: '1', mute: CONFIG.trailerStartMuted ? '1' : '0', controls: '0', modestbranding: '1', rel: '0', playsinline: '1', enablejsapi: '1', iv_load_policy: '3', fs: '0', disablekb: '1', showinfo: '0' });
-        trailerIframe = document.createElement('iframe');
-        trailerIframe.className = 'trailer-iframe';
-        trailerIframe.src = `https://www.youtube.com/embed/${trailerId}?${params.toString()}`;
-        trailerIframe.allow = 'autoplay; encrypted-media; fullscreen';
-        trailerIframe.allowFullscreen = true;
-        tc.appendChild(trailerIframe);
         trailerMuted = CONFIG.trailerStartMuted;
         trailerActive = true;
-        window.addEventListener('message', onYouTubeMessage);
-        trailerIframe.addEventListener('load', () => { try { trailerIframe.contentWindow.postMessage(JSON.stringify({ event: 'listening' }), '*'); } catch (err) {} });
+        // Clear container content
+        tc.innerHTML = '';
         requestAnimationFrame(() => {
             tc.classList.add('active');
-            // Start seek bar polling
-            startSeekBarPolling();
+            // Create YT.Player — uses the proper YouTube IFrame Player API
+            // which gives us getCurrentTime, getDuration, seekTo, mute, unMute, etc.
+            if (ytApiReady && window.YT && window.YT.Player) {
+                trailerPlayer = new window.YT.Player(tc, {
+                    videoId: trailerId,
+                    playerVars: {
+                        autoplay: 1,
+                        mute: CONFIG.trailerStartMuted ? 1 : 0,
+                        controls: 0,
+                        modestbranding: 1,
+                        rel: 0,
+                        playsinline: 1,
+                        iv_load_policy: 3,
+                        fs: 0,
+                        disablekb: 1,
+                        showinfo: 0
+                    },
+                    events: {
+                        onReady: (e) => {
+                            trailerIframe = e.target.getIframe();
+                            trailerIframe.className = 'trailer-iframe';
+                            if (CONFIG.trailerStartMuted) { e.target.mute(); } else { e.target.unMute(); e.target.setVolume(100); }
+                            startSeekBarPolling();
+                        },
+                        onStateChange: (e) => {
+                            // 0 = ended, 1 = playing, 2 = paused
+                            if (e.data === 0) stopTrailer();
+                        }
+                    }
+                });
+            } else {
+                // Fallback: simple iframe embed if API not loaded yet
+                const params = new URLSearchParams({ autoplay: '1', mute: CONFIG.trailerStartMuted ? '1' : '0', controls: '0', modestbranding: '1', rel: '0', playsinline: '1', enablejsapi: '1', iv_load_policy: '3', fs: '0', disablekb: '1' });
+                trailerIframe = document.createElement('iframe');
+                trailerIframe.className = 'trailer-iframe';
+                trailerIframe.src = `https://www.youtube.com/embed/${trailerId}?${params.toString()}`;
+                trailerIframe.allow = 'autoplay; encrypted-media; fullscreen';
+                trailerIframe.allowFullscreen = true;
+                tc.appendChild(trailerIframe);
+            }
         });
+        // Load API if not already loaded (for next time)
+        loadYouTubeAPI();
     }
     function toggleTrailerMute() {
-        if (!trailerIframe) return;
+        if (!trailerPlayer) return;
         trailerMuted = !trailerMuted;
-        // Try YouTube IFrame API postMessage first
-        const cmd = trailerMuted ? 'mute' : 'unMute';
-        trailerIframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: cmd, args: [] }), '*');
-        if (!trailerMuted) {
-            trailerIframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'setVolume', args: [100] }), '*');
-        }
+        try {
+            if (trailerMuted) trailerPlayer.mute();
+            else { trailerPlayer.unMute(); trailerPlayer.setVolume(100); }
+        } catch (e) {}
         const ub = state.trailerControls?.querySelector('.unmute-btn');
         if (ub) {
             if (trailerMuted) { ub.innerHTML = `<svg viewBox="0 0 24 24"><path d="M12,4L9.91,6.09L12,8.18M4.27,3L3,4.27L7.73,9H3V15H7L12,20V13.27L16.25,17.52C15.59,18 14.84,18.35 14,18.53V20.59C15.28,20.38 16.5,19.9 17.5,19.18L19.73,21.41L21,20.14L4.27,3M19,12C19,12.82 18.86,13.61 18.61,14.34L20.12,15.85C20.68,14.66 21,13.37 21,12C21,7.72 18,4.14 14,3.23V5.29C16.89,6.15 19,8.83 19,12M12,4L9.91,6.09L12,8.18V4Z"/></svg>`; ub.title = "Unmute"; }
             else { ub.innerHTML = `<svg viewBox="0 0 24 24"><path d="M3,9V15H7L12,20V4L7,9H3M16.5,12C16.5,10.83 15.92,9.79 15,9.14V14.86C15.92,14.21 16.5,13.17 16.5,12M14,3.23V5.29C16.89,6.15 19,8.83 19,12C19,15.17 16.89,17.85 14,18.71V20.77C18,19.86 21,16.28 21,12C21,7.72 18,4.14 14,3.23Z"/></svg>`; ub.title = "Mute"; }
         }
     }
-    let seekPollTimer = null;
     function startSeekBarPolling() {
         if (seekPollTimer) clearInterval(seekPollTimer);
-        // Request initial state
-        try { trailerIframe?.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'getDuration', args: [] }), '*'); } catch (e) {}
         seekPollTimer = setInterval(() => {
-            if (!trailerIframe || !trailerActive) { clearInterval(seekPollTimer); return; }
+            if (!trailerPlayer || !trailerActive) { clearInterval(seekPollTimer); return; }
             try {
-                trailerIframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'getCurrentTime', args: [] }), '*');
-                trailerIframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'getDuration', args: [] }), '*');
+                const dur = trailerPlayer.getDuration();
+                const cur = trailerPlayer.getCurrentTime();
+                if (dur > 0) trailerDuration = dur;
+                if (dur > 0 && cur != null) {
+                    const pct = (cur / dur) * 100;
+                    if (state.seekFill) state.seekFill.style.width = pct + '%';
+                }
             } catch (e) {}
         }, 250);
-    }
-    let trailerDuration = 0;
-    function handleYouTubeInfoDelivery(info) {
-        if (info.duration != null) trailerDuration = info.duration;
-        if (info.currentTime != null && trailerDuration > 0) {
-            const pct = (info.currentTime / trailerDuration) * 100;
-            if (state.seekFill) state.seekFill.style.width = pct + '%';
-        }
     }
     function updateTrailerButtonVisibility() {
         const vi = slider.children[currentIndex];
@@ -1025,8 +1062,8 @@ function attachSliderBehavior(state, apiClient) {
     if (trailerBtnOverlay) trailerBtnOverlay.addEventListener("click", (e) => { e.stopPropagation(); if (trailerActive) stopTrailer(); else startTrailer(); });
     if (state.unmuteBtn) state.unmuteBtn.addEventListener("click", (e) => { e.stopPropagation(); toggleTrailerMute(); });
     if (state.closeTrailerBtn) state.closeTrailerBtn.addEventListener("click", (e) => { e.stopPropagation(); stopTrailer(); });
-    if (state.seekBar) state.seekBar.addEventListener("click", (e) => { e.stopPropagation(); if (!trailerIframe || trailerDuration <= 0) return; const rect = state.seekBar.getBoundingClientRect(); const pct = (e.clientX - rect.left) / rect.width; const time = pct * trailerDuration; try { trailerIframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'seekTo', args: [time, true] }), '*'); } catch (err) {} });
-    if (state.fullscreenBtn) state.fullscreenBtn.addEventListener("click", (e) => { e.stopPropagation(); const vi = slider.children[currentIndex]; const tc = vi?.querySelector('.trailer-container'); const iframe = tc?.querySelector('.trailer-iframe'); if (iframe) { if (iframe.requestFullscreen) iframe.requestFullscreen(); else if (iframe.webkitRequestFullscreen) iframe.webkitRequestFullscreen(); } });
+    if (state.seekBar) state.seekBar.addEventListener("click", (e) => { e.stopPropagation(); if (!trailerPlayer || trailerDuration <= 0) return; const rect = state.seekBar.getBoundingClientRect(); const pct = (e.clientX - rect.left) / rect.width; const time = pct * trailerDuration; try { trailerPlayer.seekTo(time, true); } catch (err) {} });
+    if (state.fullscreenBtn) state.fullscreenBtn.addEventListener("click", (e) => { e.stopPropagation(); const iframe = trailerPlayer?.getIframe?.() || trailerIframe; if (iframe) { if (iframe.requestFullscreen) iframe.requestFullscreen(); else if (iframe.webkitRequestFullscreen) iframe.webkitRequestFullscreen(); } });
     if (favoriteButtonOverlay) favoriteButtonOverlay.addEventListener("click", async (e) => {
         e.stopPropagation(); const vi = slider.children[currentIndex];
         if (vi?.dataset?.itemId) { const itemId = vi.dataset.itemId; const isFav = vi.dataset.isFavorite === "true"; const newState = await toggleFavorite(itemId, apiClient, isFav); vi.dataset.isFavorite = newState ? "true" : "false"; slider.querySelectorAll(`.banner-item[data-item-id="${itemId}"]`).forEach(c => c.dataset.isFavorite = newState ? "true" : "false"); updateFavoriteButton(); }
@@ -1122,5 +1159,6 @@ function observeViewAndInit() {
     setTimeout(() => { const hv = !!document.querySelector(".view:not(.hide) .homeSectionsContainer, .view:not(.hide) [data-view='home']"); if (hv && !SPOTLIGHT_INITIALIZED) { homeWasVisible = true; init(); } }, 50);
 }
 
+loadYouTubeAPI();
 observeViewAndInit();
 })();
