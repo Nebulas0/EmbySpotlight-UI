@@ -255,10 +255,10 @@ function insertStyles() {
     .spotlight .banner-info-backdrop{backdrop-filter:blur(4px) !important;-webkit-backdrop-filter:blur(4px) !important}
     .spotlight .banner-genre{font-size:clamp(.8rem,2.5vw,1rem) !important;padding:.1rem .5rem !important}
     .spotlight .banner-meta-item{font-size:clamp(.8rem,2.5vw,1rem) !important}
-    .spotlight .trailer-controls{top:.5rem !important;left:.5rem !important;right:auto !important;bottom:auto !important;gap:.4rem !important}
+    .spotlight .trailer-controls{top:.5rem !important;right:.5rem !important;left:auto !important;bottom:auto !important;gap:.4rem !important}
     .spotlight.trailer-playing .trailer-controls{opacity:1 !important;pointer-events:auto !important}
     .spotlight.trailer-playing .arrow{opacity:.4 !important;pointer-events:auto !important}
-    .spotlight .trailer-seek-bar{opacity:1 !important}
+    .spotlight .trailer-seek-bar{opacity:1 !important;bottom:3rem !important}
     .spotlight .trailer-control-btn{width:36px !important;height:36px !important}
     .spotlight .trailer-control-btn svg{width:18px !important;height:18px !important}
     .spotlight .progress-bar-container{height:2px !important}
@@ -275,13 +275,13 @@ function insertStyles() {
 .spotlight .trailer-container{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:100%;height:100%;z-index:20;opacity:0;pointer-events:none;transition:opacity .4s ease;background:#000;overflow:hidden}
 .spotlight .trailer-container.active{opacity:1;pointer-events:auto}
 .spotlight .trailer-iframe{width:100%;height:100%;border:none;display:block;position:absolute;top:0;left:0}
-.spotlight .trailer-controls{position:absolute;top:2rem;left:2rem;z-index:30;display:flex;gap:.8rem;opacity:0;transition:opacity .3s ease;pointer-events:none}
+.spotlight .trailer-controls{position:absolute;top:2rem;right:2rem;z-index:30;display:flex;gap:.8rem;opacity:0;transition:opacity .3s ease;pointer-events:none}
 .spotlight.trailer-playing:hover .trailer-controls{opacity:1;pointer-events:auto}
 .spotlight.trailer-playing .trailer-controls{opacity:1;pointer-events:auto}
 .spotlight .trailer-control-btn{width:48px;height:48px;border-radius:50%;background:rgba(0,0,0,.6);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s ease;color:#fff}
 .spotlight .trailer-control-btn:hover{background:rgba(0,0,0,.8);transform:scale(1.05)}
 .spotlight .trailer-control-btn svg{width:24px;height:24px;fill:#fff}
-.spotlight .trailer-seek-bar{position:absolute;bottom:0;left:0;width:100%;height:4px;background:rgba(255,255,255,.2);z-index:31;cursor:pointer;opacity:0;transition:opacity .3s ease}
+.spotlight .trailer-seek-bar{position:absolute;bottom:4rem;left:0;width:100%;height:6px;background:rgba(255,255,255,.2);z-index:31;cursor:pointer;opacity:0;transition:opacity .3s ease}
 .spotlight.trailer-playing:hover .trailer-seek-bar{opacity:1}
 .spotlight .trailer-seek-fill{height:100%;width:0%;background:#ff0000;transition:width .1s linear}
 .spotlight .trailer-seek-bar:hover .trailer-seek-fill{background:#ff3333}
