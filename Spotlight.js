@@ -45,7 +45,8 @@ const STATE = {
     totalRecordCount: null,
     usedStartIndices: new Set(),
     isFetchingBatch: false,
-    apiClient: null
+    apiClient: null,
+    nextGroupReady: null  // preloaded next group, ready for instant swap
 };
 
 const homeContainerSelectors = [
@@ -323,6 +324,23 @@ function getNextGroupFromPool() {
     return group;
 }
 
+async function preloadNextGroup(apiClient) {
+    if (STATE.nextGroupReady) return STATE.nextGroupReady;
+    const group = getNextGroupFromPool();
+    if (!group || group.length === 0) return null;
+    if (CONFIG.enablePreloading) {
+        console.log(`[Spotlight] Preloading next group (${group.length} items) ahead of cycle completion`);
+        await Promise.all(group.map(item => new Promise(resolve => {
+            const img = new Image(); const to = setTimeout(resolve, 2000);
+            img.onload = () => { clearTimeout(to); resolve(); }; img.onerror = () => { clearTimeout(to); resolve(); };
+            img.src = getImageUrl(apiClient, item, { width: CONFIG.preloadWidth, prefer: "Backdrop" });
+        })));
+    }
+    STATE.nextGroupReady = group;
+    console.log(`[Spotlight] Next group preloaded and ready for instant swap`);
+    return group;
+}
+
 async function fetchStandardItems(apiClient) {
     STATE.apiClient = apiClient;
     const parentId = CONFIG.collectionId || CONFIG.libraryId || null;
@@ -482,11 +500,16 @@ function attachSliderBehavior(state, apiClient) {
 
     function animate() {
         resetOverviews(); updateTransform(currentIndex,true); setActiveDot(currentIndex); updateFavoriteButton(); setTimeout(()=>triggerZoomAnimation(),100);
+        // Preload next group when 2 slides before cycle end (slide 8 of 10)
+        if (CONFIG.autoAdvanceOnCycle && !isSwapping && !STATE.nextGroupReady &&
+            currentIndex === itemsCount - 1 && typeof state.preloadNext === 'function') {
+            state.preloadNext();
+        }
         setTimeout(() => {
             if (currentIndex === 0) { currentIndex = itemsCount; updateTransform(currentIndex,false); setActiveDot(currentIndex); updateFavoriteButton(); setTimeout(()=>triggerZoomAnimation(),100); }
             else if (currentIndex === itemsCount+1) {
                 currentIndex = 1; updateTransform(currentIndex,false); setActiveDot(currentIndex); updateFavoriteButton(); setTimeout(()=>triggerZoomAnimation(),100);
-                if (CONFIG.autoAdvanceOnCycle && !isSwapping) { cyclesCompleted++; console.log(`[Spotlight] Cycle ${cyclesCompleted} complete — loading next group`); if (typeof state.onCycleComplete === 'function') state.onCycleComplete(); }
+                if (CONFIG.autoAdvanceOnCycle && !isSwapping) { cyclesCompleted++; console.log(`[Spotlight] Cycle ${cyclesCompleted} complete — swapping to next group`); if (typeof state.onCycleComplete === 'function') state.onCycleComplete(); }
             }
         }, 520);
     }
@@ -567,16 +590,18 @@ async function init() {
         else home.insertBefore(container, home.firstChild);
         const loader = container.querySelector(".loader"); if (loader) loader.style.display = "none";
         const sliderState = { slider, itemsCount: items.length, btnLeft, btnRight, controls, spotlight, favoriteButtonOverlay };
+        sliderState.preloadNext = async function() {
+            if (!STATE.nextGroupReady) await preloadNextGroup(apiClient);
+        };
         sliderState.onCycleComplete = async function() {
-            const nextGroup = getNextGroupFromPool();
+            // Use preloaded group if available, otherwise fetch+preload now
+            let nextGroup = STATE.nextGroupReady;
+            STATE.nextGroupReady = null;
+            if (!nextGroup) {
+                console.log("[Spotlight] No preloaded group ready, fetching now");
+                nextGroup = await preloadNextGroup(apiClient);
+            }
             if (nextGroup && nextGroup.length > 0) {
-                if (CONFIG.enablePreloading) {
-                    await Promise.all(nextGroup.map(item => new Promise(resolve => {
-                        const img = new Image(); const to = setTimeout(resolve, 2000);
-                        img.onload = () => { clearTimeout(to); resolve(); }; img.onerror = () => { clearTimeout(to); resolve(); };
-                        img.src = getImageUrl(apiClient, item, { width: CONFIG.preloadWidth, prefer: "Backdrop" });
-                    })));
-                }
                 if (typeof sliderState.swapGroup === 'function') sliderState.swapGroup(nextGroup);
             } else { console.log("[Spotlight] No next group available yet — will retry on next cycle"); }
         };
@@ -590,7 +615,7 @@ function cleanup() {
     if (SPOTLIGHT_INSTANCE?.cleanup) SPOTLIGHT_INSTANCE.cleanup();
     if (SPOTLIGHT_INSTANCE?.container) SPOTLIGHT_INSTANCE.container.remove();
     SPOTLIGHT_INSTANCE = null; SPOTLIGHT_INITIALIZED = false;
-    STATE.itemPool = []; STATE.poolCursor = 0; STATE.totalRecordCount = null; STATE.usedStartIndices.clear(); STATE.isFetchingBatch = false;
+    STATE.itemPool = []; STATE.poolCursor = 0; STATE.totalRecordCount = null; STATE.usedStartIndices.clear(); STATE.isFetchingBatch = false; STATE.nextGroupReady = null;
 }
 
 function observeViewAndInit() {
