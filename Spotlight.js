@@ -54,6 +54,24 @@ if (typeof GM_xmlhttpRequest === 'undefined') {
 		// SPOTLIGHT CONTAINER SETTINGS
 		// ══════════════════════════════════════════════════════════════════
         limit: 10,
+
+		// ══════════════════════════════════════════════════════════════════
+		// SPOTLIGHT SOURCE — Library or Collection to fetch from
+		// ══════════════════════════════════════════════════════════════════
+		// Set this to a Library ID or Collection ID to fetch items from a
+		// specific source instead of querying all libraries.
+		// Leave empty to query all libraries (legacy behavior).
+		// Find Library IDs via: /emby/Library/VirtualFolders?api_key=<KEY>
+		// Find Collection IDs by browsing a collection and copying ParentId.
+		spotlightSourceId: "",  // e.g. "f137a2dd21a1b01b8c1c5d6a00000000"
+
+		// How many items to fetch per API batch (fetched once, displayed in
+		// groups of `limit`). Larger = more variety before re-fetching.
+		spotlightBatchSize: 100,
+
+		// When the user cycles through all slides, automatically load the
+		// next group from the batch instead of wrapping around.
+		autoAdvanceOnCycle: true,
         autoplayInterval: 10000,
         vignetteColorTop:    "#1e1e1e",
         vignetteColorBottom: "#1e1e1e",
@@ -381,7 +399,13 @@ if (typeof GM_xmlhttpRequest === 'undefined') {
         // NEW: Store items for lazy loading
         sliderItems: [],
         // NEW: Pending enrichment promises to avoid duplicates
-        enrichmentPromises: {}
+        enrichmentPromises: {},
+
+        // ── Batch pool: fetch N items once, display `limit` at a time ──
+        itemPool: [],           // fetched batch of items (up to spotlightBatchSize)
+        poolDisplayOffset: 0,   // offset into itemPool for current display group
+        isAdvancing: false,     // guard against concurrent auto-advance
+        sliderCleanup: null     // cleanup function from attachSliderBehavior
     };
     
     const SPOTLIGHT_CONTAINER_ID = 'emby-spotlight-slider-container';
@@ -1416,20 +1440,74 @@ if (typeof GM_xmlhttpRequest === 'undefined') {
         document.head.appendChild(s);
     }
     
+    // Fields requested from Emby — trimmed to only what the UI uses.
+    // Removed Taglines (not rendered) to reduce response payload.
+    const ITEM_FIELDS = "PrimaryImageAspectRatio,BackdropImageTags,ImageTags,ParentLogoImageTag,ParentLogoItemId,CriticRating,CommunityRating,OfficialRating,PremiereDate,ProductionYear,Genres,RunTimeTicks,Overview,RemoteTrailers,LocalTrailerIds,ProviderIds";
+
+    // Legacy query builder — kept for backward compatibility (custom items path).
     function buildQuery() {
         return {
             IncludeItemTypes: "Movie,Series",
             Recursive: true,
-            Limit: 100,
-            IsPlayed: false,
-            Years: "2020,2021,2022,2023,2024,2025,2026",
-            SortBy: "Random",
+            Limit: CONFIG.spotlightBatchSize || 100,
+            SortBy: "ProductionYear,SortName",
             SortOrder: "Descending",
             EnableImageTypes: "Primary,Backdrop,Thumb,Logo,Banner",
             EnableUserData: false,
             EnableTotalRecordCount: false,
-            Fields: "PrimaryImageAspectRatio,BackdropImageTags,ImageTags,ParentLogoImageTag,ParentLogoItemId,CriticRating,CommunityRating,OfficialRating,PremiereDate,ProductionYear,Genres,RunTimeTicks,Taglines,Overview,RemoteTrailers,LocalTrailerIds,ProviderIds"
+            Fields: ITEM_FIELDS
         };
+    }
+
+    // ── Fast batch fetch: 2 lightweight API calls ──────────────────────
+    // Call 1: Limit:0 → just get TotalRecordCount (near-instant, no item data)
+    // Call 2: Limit:batchSize, StartIndex:random → indexed sort, skips to offset
+    // This avoids SortBy:"Random" which forces Emby to scan the entire library.
+    async function fetchItemsBatch(apiClient) {
+        try {
+            const userId = apiClient.getCurrentUserId();
+            const sourceId = CONFIG.spotlightSourceId || undefined;
+            const batchSize = CONFIG.spotlightBatchSize || 100;
+
+            // Step 1: fast count query (no items, just total)
+            const countQuery = {
+                IncludeItemTypes: "Movie,Series",
+                Recursive: true,
+                Limit: 0,
+                EnableTotalRecordCount: true,
+                EnableImageData: false,
+                Fields: ""
+            };
+            if (sourceId) countQuery.ParentId = sourceId;
+
+            const countRes = await apiClient.getItems(userId, countQuery);
+            const total = countRes?.TotalRecordCount || 0;
+            if (total === 0) return [];
+
+            // Step 2: fetch a batch from a random offset, sorted by year (indexed = fast)
+            const maxStart = Math.max(0, total - batchSize);
+            const startIndex = total > batchSize ? Math.floor(Math.random() * maxStart) : 0;
+
+            const query = {
+                IncludeItemTypes: "Movie,Series",
+                Recursive: true,
+                Limit: batchSize,
+                StartIndex: startIndex,
+                SortBy: "ProductionYear,SortName",
+                SortOrder: "Descending",
+                EnableImageTypes: "Primary,Backdrop,Thumb,Logo,Banner",
+                EnableUserData: false,
+                EnableTotalRecordCount: false,
+                Fields: ITEM_FIELDS
+            };
+            if (sourceId) query.ParentId = sourceId;
+
+            const result = await apiClient.getItems(userId, query);
+            return shuffleArray(result?.Items || []);
+        } catch (e) {
+            console.error("[Spotlight] fetchItemsBatch error", e);
+            return [];
+        }
     }
     
     function getImageUrl(apiClient, item, options) {
@@ -1485,20 +1563,40 @@ if (typeof GM_xmlhttpRequest === 'undefined') {
         return items;
     }
     
-    async function fetchStandardItems(apiClient) {
-        try {
-            const items = await apiClient.getItems(apiClient.getCurrentUserId(), buildQuery());
-            return shuffleArray(items.Items || []).slice(0, CONFIG.limit);
-        } catch { return []; }
+    // Get the next group of `limit` items from the pool.
+    // If the pool is exhausted, fetches a new batch of `spotlightBatchSize`.
+    async function getNextDisplayItems(apiClient) {
+        const displayCount = CONFIG.limit;
+
+        // If pool doesn't have enough items left, fetch a new batch
+        if (!STATE.itemPool.length || STATE.poolDisplayOffset + displayCount > STATE.itemPool.length) {
+            console.log("[Spotlight] Fetching new batch from API...");
+            STATE.itemPool = await fetchItemsBatch(apiClient);
+            STATE.poolDisplayOffset = 0;
+            if (!STATE.itemPool.length) return [];
+        }
+
+        const items = STATE.itemPool.slice(
+            STATE.poolDisplayOffset,
+            STATE.poolDisplayOffset + displayCount
+        );
+        STATE.poolDisplayOffset += displayCount;
+        return items;
     }
-    
+
     async function fetchItems(apiClient) {
+        // Check for custom items file first (legacy behavior)
         const customItemIds = await loadCustomItemsList();
         if (customItemIds?.length > 0) {
             const items = await fetchItemsByIds(apiClient, customItemIds);
-            if (items.length > 0) return shuffleArray(items).slice(0, Math.min(CONFIG.limit, items.length));
+            if (items.length > 0) {
+                STATE.itemPool = shuffleArray(items);
+                STATE.poolDisplayOffset = CONFIG.limit;
+                return STATE.itemPool.slice(0, Math.min(CONFIG.limit, items.length));
+            }
         }
-        return fetchStandardItems(apiClient);
+        // Pool-based batch fetch (fast: indexed sort + random offset)
+        return getNextDisplayItems(apiClient);
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -2345,6 +2443,8 @@ if (typeof GM_xmlhttpRequest === 'undefined') {
     }
     
     async function refreshSlideshow(apiClient, oldContainer) {
+        // Clean up old slider (stop autoplay, remove listeners)
+        if (STATE.sliderCleanup) { try { STATE.sliderCleanup(); } catch (e) {} STATE.sliderCleanup = null; }
         pauseAllVideos();
         Object.keys(STATE.skipIntervals).forEach(id => stopSponsorBlockMonitoring(id));
         Object.values(STATE.videoPlayers).forEach(p => { if (p?.destroy) p.destroy(); });
@@ -2356,6 +2456,9 @@ if (typeof GM_xmlhttpRequest === 'undefined') {
         STATE.enrichedSlides = new Set();
         STATE.sliderItems = [];
         STATE.enrichmentPromises = {};
+        STATE.isAdvancing = false;
+        // NOTE: itemPool and poolDisplayOffset are intentionally preserved
+        // so that refreshSlideshow uses the next group from the pool.
         if (oldContainer) oldContainer.remove();
         try { sessionStorage.removeItem('spotlight-current-index'); } catch (e) {}
         STATE.isInitializing = false;
@@ -2533,6 +2636,15 @@ if (typeof GM_xmlhttpRequest === 'undefined') {
                     setActiveDot(currentIndex);
                     setTimeout(() => triggerZoomAnimation(), 100);
                 } else if (currentIndex === itemsCount + 1) {
+                    // ── Auto-advance: user cycled through all slides ──
+                    // Instead of wrapping to slide 1, load the next group
+                    // from the batch pool (or fetch a new batch if exhausted).
+                    if (CONFIG.autoAdvanceOnCycle && !STATE.isAdvancing) {
+                        STATE.isAdvancing = true;
+                        console.log("[Spotlight] Cycle complete — loading next group");
+                        refreshSlideshow(apiClient, document.getElementById(SPOTLIGHT_CONTAINER_ID));
+                        return;
+                    }
                     currentIndex = 1;
                     updateTransform(currentIndex, false);
                     setActiveDot(currentIndex);
@@ -2608,6 +2720,7 @@ if (typeof GM_xmlhttpRequest === 'undefined') {
 		});
         
         state.cleanup = () => { window.removeEventListener("resize", resizeHandler); stopAutoplay(); };
+        STATE.sliderCleanup = state.cleanup;
     }
     
     // ══════════════════════════════════════════════════════════════════
@@ -2843,6 +2956,10 @@ if (typeof GM_xmlhttpRequest === 'undefined') {
                 STATE.enrichedSlides = new Set();
                 STATE.sliderItems = [];
                 STATE.enrichmentPromises = {};
+                STATE.itemPool = [];
+                STATE.poolDisplayOffset = 0;
+                STATE.isAdvancing = false;
+                if (STATE.sliderCleanup) { try { STATE.sliderCleanup(); } catch (e) {} STATE.sliderCleanup = null; }
                 
                 document.getElementById(SPOTLIGHT_CONTAINER_ID)?.remove();
             }
