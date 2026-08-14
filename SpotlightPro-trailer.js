@@ -236,17 +236,19 @@ function insertStyles() {
 /* === Trailer Support === */
 .spotlight .trailer-button-overlay{position:absolute;top:2rem;right:12rem;z-index:25;opacity:0;transition:opacity .3s ease;pointer-events:none}
 .spotlight-container:hover .trailer-button-overlay{opacity:1;pointer-events:all}
-.spotlight .trailer-button{width:80px;height:80px;border-radius:50%;background:rgba(55,55,55,.3);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.spotlight .trailer-button{width:64px;height:64px;border-radius:50%;background:rgba(55,55,55,.3);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.4)}
 .spotlight .trailer-button:hover{transform:scale(1.02);background:${CONFIG.playbuttonColor};box-shadow:0 6px 20px rgba(0,0,0,.5)}
-.spotlight .trailer-button svg{width:36px;height:36px;fill:#fff;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3))}
+.spotlight .trailer-button svg{width:28px;height:28px;fill:#fff;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3))}
 .spotlight .trailer-container{position:absolute;top:0;left:0;width:100%;height:100%;z-index:20;opacity:0;pointer-events:none;transition:opacity .4s ease;background:#000;overflow:hidden}
 .spotlight .trailer-container.active{opacity:1;pointer-events:auto}
 .spotlight .trailer-iframe{width:100%;height:100%;border:none;display:block}
 .spotlight .trailer-controls{position:absolute;bottom:2rem;left:2rem;z-index:30;display:flex;gap:.8rem;opacity:0;transition:opacity .3s ease;pointer-events:none}
-.spotlight .trailer-container.active ~ .trailer-controls{opacity:1;pointer-events:auto}
+.spotlight-container.trailer-playing:hover .trailer-controls{opacity:1;pointer-events:auto}
+.spotlight-container.trailer-playing .trailer-controls{opacity:1;pointer-events:auto}
 .spotlight .trailer-control-btn{width:48px;height:48px;border-radius:50%;background:rgba(0,0,0,.6);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s ease;color:#fff}
 .spotlight .trailer-control-btn:hover{background:rgba(0,0,0,.8);transform:scale(1.05)}
 .spotlight .trailer-control-btn svg{width:24px;height:24px;fill:#fff}
+.spotlight .trailer-controls .trailer-control-btn:hover{background:rgba(255,255,255,.2)}
 .spotlight .banner-item.show-trailer .banner-logo,
 .spotlight .banner-item.show-trailer .banner-info,
 .spotlight .banner-item.show-trailer .banner-info-backdrop,
@@ -670,11 +672,16 @@ function buildSlider(items, apiClient) {
     unmuteBtn.className = "trailer-control-btn unmute-btn";
     unmuteBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M3,9V15H7L12,20V4L7,9H3M16.5,12C16.5,10.83 15.92,9.79 15,9.14V14.86C15.92,14.21 16.5,13.17 16.5,12M14,3.23V5.29C16.89,6.15 19,8.83 19,12C19,15.17 16.89,17.85 14,18.71V20.77C18,19.86 21,16.28 21,12C21,7.72 18,4.14 14,3.23Z"/></svg>`;
     unmuteBtn.setAttribute("aria-label", "Mute"); unmuteBtn.title = "Mute";
+    const fullscreenBtn = document.createElement("button");
+    fullscreenBtn.className = "trailer-control-btn fullscreen-btn";
+    fullscreenBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M5,5H10V7H7V10H5V5M14,5H19V10H17V7H14V5M19,14V19H14V17H17V14H19M10,19H5V14H7V17H10V19Z"/></svg>`;
+    fullscreenBtn.setAttribute("aria-label", "Fullscreen"); fullscreenBtn.title = "Fullscreen";
     const closeTrailerBtn = document.createElement("button");
     closeTrailerBtn.className = "trailer-control-btn close-trailer-btn";
     closeTrailerBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"/></svg>`;
     closeTrailerBtn.setAttribute("aria-label", "Close Trailer"); closeTrailerBtn.title = "Close Trailer";
     trailerControls.appendChild(unmuteBtn);
+    trailerControls.appendChild(fullscreenBtn);
     trailerControls.appendChild(closeTrailerBtn);
     spotlight.appendChild(trailerControls);
     let progressBarFill = null;
@@ -684,7 +691,7 @@ function buildSlider(items, apiClient) {
         pbc.appendChild(progressBarFill); spotlight.appendChild(pbc);
     }
     container.appendChild(spotlight);
-    return { container, spotlight, slider, btnLeft, btnRight, controls, controlsWrapper, slideCounter, sliderWrapper, playButtonOverlay, favoriteButtonOverlay, progressBarFill, trailerButtonOverlay, trailerControls, unmuteBtn, closeTrailerBtn };
+    return { container, spotlight, slider, btnLeft, btnRight, controls, controlsWrapper, slideCounter, sliderWrapper, playButtonOverlay, favoriteButtonOverlay, progressBarFill, trailerButtonOverlay, trailerControls, unmuteBtn, fullscreenBtn, closeTrailerBtn };
 }
 
 function playItem(itemId, serverId, apiClient) {
@@ -714,6 +721,7 @@ function attachSliderBehavior(state, apiClient) {
     let touchStartX = 0, touchStartY = 0, touchEndX = 0, touchEndY = 0, isSwiping = false, swipeStartTime = 0;
     let autoplayTimer = null, progressTimer = null, isAutoplayPaused = false;
     let trailerActive = false, trailerIframe = null, trailerMuted = true;
+    function onYouTubeMessage(e) { if (e.origin !== 'https://www.youtube.com') return; try { const data = JSON.parse(e.data); if (data.event === 'infoDelivery' && data.info && data.info.playerState === 0) stopTrailer(); } catch (err) {} }
 
     function startProgress() {
         if (!progressBarFill || !CONFIG.enableProgressBar) return;
@@ -756,7 +764,9 @@ function attachSliderBehavior(state, apiClient) {
         if (trailerIframe) { trailerIframe.src = ''; trailerIframe.remove(); trailerIframe = null; }
         const vi = slider.children[currentIndex];
         if (vi) { const tc = vi.querySelector('.trailer-container'); if (tc) tc.classList.remove('active'); vi.classList.remove('show-trailer'); }
+        spotlight.classList.remove('trailer-playing');
         trailerActive = false; trailerMuted = true;
+        window.removeEventListener('message', onYouTubeMessage);
         const ub = state.trailerControls?.querySelector('.unmute-btn');
         if (ub) { ub.innerHTML = `<svg viewBox="0 0 24 24"><path d="M3,9V15H7L12,20V4L7,9H3M16.5,12C16.5,10.83 15.92,9.79 15,9.14V14.86C15.92,14.21 16.5,13.17 16.5,12M14,3.23V5.29C16.89,6.15 19,8.83 19,12C19,15.17 16.89,17.85 14,18.71V20.77C18,19.86 21,16.28 21,12C21,7.72 18,4.14 14,3.23Z"/></svg>`; ub.title = "Mute"; }
         startAutoplay();
@@ -773,6 +783,7 @@ function attachSliderBehavior(state, apiClient) {
         stopAutoplay();
         stopProgress();
         vi.classList.add('show-trailer');
+        spotlight.classList.add('trailer-playing');
         const params = new URLSearchParams({ autoplay: '1', mute: CONFIG.trailerStartMuted ? '1' : '0', controls: '1', modestbranding: '1', rel: '0', playsinline: '1', enablejsapi: '1' });
         trailerIframe = document.createElement('iframe');
         trailerIframe.className = 'trailer-iframe';
@@ -782,6 +793,7 @@ function attachSliderBehavior(state, apiClient) {
         tc.appendChild(trailerIframe);
         trailerMuted = CONFIG.trailerStartMuted;
         trailerActive = true;
+        window.addEventListener('message', onYouTubeMessage);
         requestAnimationFrame(() => tc.classList.add('active'));
     }
     function toggleTrailerMute() {
@@ -934,6 +946,7 @@ function attachSliderBehavior(state, apiClient) {
     if (trailerBtnOverlay) trailerBtnOverlay.addEventListener("click", (e) => { e.stopPropagation(); if (trailerActive) stopTrailer(); else startTrailer(); });
     if (state.unmuteBtn) state.unmuteBtn.addEventListener("click", (e) => { e.stopPropagation(); toggleTrailerMute(); });
     if (state.closeTrailerBtn) state.closeTrailerBtn.addEventListener("click", (e) => { e.stopPropagation(); stopTrailer(); });
+    if (state.fullscreenBtn) state.fullscreenBtn.addEventListener("click", (e) => { e.stopPropagation(); const vi = slider.children[currentIndex]; const tc = vi?.querySelector('.trailer-container'); const iframe = tc?.querySelector('.trailer-iframe'); if (iframe) { if (iframe.requestFullscreen) iframe.requestFullscreen(); else if (iframe.webkitRequestFullscreen) iframe.webkitRequestFullscreen(); } });
     if (favoriteButtonOverlay) favoriteButtonOverlay.addEventListener("click", async (e) => {
         e.stopPropagation(); const vi = slider.children[currentIndex];
         if (vi?.dataset?.itemId) { const itemId = vi.dataset.itemId; const isFav = vi.dataset.isFavorite === "true"; const newState = await toggleFavorite(itemId, apiClient, isFav); vi.dataset.isFavorite = newState ? "true" : "false"; slider.querySelectorAll(`.banner-item[data-item-id="${itemId}"]`).forEach(c => c.dataset.isFavorite = newState ? "true" : "false"); updateFavoriteButton(); }
@@ -978,13 +991,13 @@ async function init() {
         const items = await fetchItems(apiClient);
         if (!items?.length) { SPOTLIGHT_INITIALIZED = false; return; }
         await preloadImages(items, apiClient);
-        const { container, spotlight, slider, btnLeft, btnRight, controls, controlsWrapper, slideCounter, favoriteButtonOverlay, progressBarFill, trailerButtonOverlay, trailerControls, unmuteBtn, closeTrailerBtn } = buildSlider(items, apiClient);
+        const { container, spotlight, slider, btnLeft, btnRight, controls, controlsWrapper, slideCounter, favoriteButtonOverlay, progressBarFill, trailerButtonOverlay, trailerControls, unmuteBtn, fullscreenBtn, closeTrailerBtn } = buildSlider(items, apiClient);
         const reference = home.querySelector ? home.querySelector(".homeSectionsContainer") : null;
         if (reference?.parentNode) reference.parentNode.insertBefore(container, reference);
         else home.insertBefore(container, home.firstChild);
         const loader = container.querySelector(".loader");
         if (loader) loader.style.display = "none";
-        const sliderState = { slider, itemsCount: items.length, btnLeft, btnRight, controls, controlsWrapper, slideCounter, spotlight, favoriteButtonOverlay, progressBarFill, container, trailerButtonOverlay, trailerControls, unmuteBtn, closeTrailerBtn };
+        const sliderState = { slider, itemsCount: items.length, btnLeft, btnRight, controls, controlsWrapper, slideCounter, spotlight, favoriteButtonOverlay, progressBarFill, container, trailerButtonOverlay, trailerControls, unmuteBtn, fullscreenBtn, closeTrailerBtn };
         sliderState.preloadNext = async function() { if (!STATE.nextGroupReady) await preloadNextGroup(apiClient); };
         sliderState.onCycleComplete = function() {
             if (STATE.nextGroupReady) {
