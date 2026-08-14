@@ -25,7 +25,7 @@ const CONFIG = {
     //   libraryId:    use a library ID as the parent
     // If both are set, collectionId takes precedence.
     // If neither is set, the whole server library is used.
-    collectionId: 2421687,
+    collectionId: 2310256,
     libraryId: null,
     enablePreloading: true,
     enableSwipe: true,
