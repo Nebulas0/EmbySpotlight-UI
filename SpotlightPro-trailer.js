@@ -162,13 +162,13 @@ function insertStyles() {
 .spotlight-container.spotlight-pro:hover{box-shadow:10px 10px 10px 0 rgba(0,0,0,.35),0 0 2px 4px ${frameColor};border-radius:.5rem}
 .spotlight-container.spotlight-pro.fade-out{opacity:0}
 .spotlight-container.spotlight-pro.fade-in{opacity:1}
-.spotlight .play-button-overlay{position:absolute;bottom:2rem;right:2rem;z-index:25;opacity:0;transition:opacity .3s ease;pointer-events:none;display:flex;align-items:center}
+.spotlight .play-button-overlay{position:absolute;top:2rem;right:2rem;z-index:25;opacity:0;transition:opacity .3s ease;pointer-events:none;display:flex;align-items:center}
 .spotlight-container:hover .play-button-overlay{opacity:1;pointer-events:all}
 .spotlight .play-button{width:64px;height:64px;border-radius:50%;background:rgba(55,55,55,.3);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.4);flex-shrink:0}
 .spotlight .play-button:hover{transform:scale(1.02);background:${CONFIG.playbuttonColor};box-shadow:0 6px 20px rgba(0,0,0,.5)}
 .spotlight .play-button svg{width:32px;height:32px;fill:#fff;margin-left:4px;position:relative;left:-2px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3));transition:filter .3s ease}
 .spotlight .play-button:hover svg{filter:drop-shadow(0 3px 6px rgba(0,0,0,.5))}
-.spotlight .favorite-button-overlay{position:absolute;bottom:2rem;left:2rem;z-index:25;opacity:0;transition:opacity .3s ease;pointer-events:none}
+.spotlight .favorite-button-overlay{position:absolute;top:2rem;left:2rem;z-index:25;opacity:0;transition:opacity .3s ease;pointer-events:none}
 .spotlight-container:hover .favorite-button-overlay{opacity:1;pointer-events:all}
 .spotlight .favorite-button{width:64px;height:64px;border-radius:50%;background:rgba(55,55,55,.3);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.4)}
 .spotlight .favorite-button:hover{transform:scale(1.02);background:${CONFIG.favoriteButtonColor};box-shadow:0 6px 20px rgba(0,0,0,.5)}
@@ -225,7 +225,7 @@ function insertStyles() {
 .spotlight .arrow:hover{opacity:1}
 .spotlight .arrow.left{left:1rem}
 .spotlight .arrow.right{right:1rem}
-.spotlight .controls-wrapper{position:absolute;right:2rem;top:2rem;z-index:20;display:flex;align-items:center;gap:.8rem}
+.spotlight .controls-wrapper{position:absolute;right:2rem;bottom:2rem;z-index:20;display:flex;align-items:center;gap:.8rem}
 .spotlight .controls{display:flex;gap:.5rem}
 .spotlight .control{width:.8rem;height:.8rem;border-radius:50%;background:rgba(255,255,255,.4);border:none;cursor:pointer;transition:background .3s}
 .spotlight .control.active{background:#fff}
@@ -237,11 +237,11 @@ function insertStyles() {
 
 /* === Mobile Responsive === */
 @media (max-width:768px),(orientation:portrait){
-    .spotlight-container.spotlight-pro{width:100%;margin-top:4rem;margin-bottom:0;border-radius:0}
+    .spotlight-container.spotlight-pro{width:94%;margin-top:5.5rem;margin-bottom:-4rem}
     .spotlight .banner-slider-wrapper{border-radius:0}
-    .spotlight .play-button-overlay{bottom:1rem;right:1rem}
-    .spotlight .favorite-button-overlay{bottom:1rem;left:1rem}
-    .spotlight .trailer-button-overlay{bottom:1rem;right:5.5rem}
+    .spotlight .play-button-overlay{top:1rem;right:1rem}
+    .spotlight .favorite-button-overlay{top:1rem;left:1rem}
+    .spotlight .trailer-button-overlay{top:1rem;right:5.5rem}
     .spotlight .play-button,.spotlight .favorite-button,.spotlight .trailer-button{width:48px;height:48px;box-shadow:0 2px 8px rgba(0,0,0,.4)}
     .spotlight .play-button svg{width:24px;height:24px;margin-left:3px}
     .spotlight .favorite-button svg{width:24px;height:24px}
@@ -252,16 +252,18 @@ function insertStyles() {
     .spotlight .banner-title{font-size:clamp(1.2rem,5vw,2rem)}
     .spotlight .banner-info{left:1rem;bottom:1rem;max-width:85%}
     .spotlight .banner-info-backdrop{backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
-    .spotlight .trailer-controls{bottom:1rem;right:9rem;gap:.5rem}
+    .spotlight .trailer-controls{top:1rem;left:1rem;gap:.5rem}
     .spotlight .trailer-control-btn{width:40px;height:40px}
     .spotlight .trailer-control-btn svg{width:20px;height:20px}
+    .spotlight .play-button-overlay,.spotlight .favorite-button-overlay,.spotlight .trailer-button-overlay{opacity:1;pointer-events:auto}
+    .spotlight .trailer-controls{opacity:1;pointer-events:auto}
     .spotlight .progress-bar-container{height:2px}
-    .spotlight .controls-wrapper{right:1rem;top:1rem}
+    .spotlight .controls-wrapper{right:1rem;bottom:1rem}
 }
 
 .spotlight .progress-bar-fill.paused{transition:none}
 /* === Trailer Support === */
-.spotlight .trailer-button-overlay{position:absolute;bottom:2rem;right:7rem;z-index:25;opacity:0;transition:opacity .3s ease;pointer-events:none}
+.spotlight .trailer-button-overlay{position:absolute;top:2rem;right:7rem;z-index:25;opacity:0;transition:opacity .3s ease;pointer-events:none}
 .spotlight-container:hover .trailer-button-overlay{opacity:1;pointer-events:all}
 .spotlight .trailer-button{width:64px;height:64px;border-radius:50%;background:rgba(55,55,55,.3);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.4)}
 .spotlight .trailer-button:hover{transform:scale(1.02);background:${CONFIG.playbuttonColor};box-shadow:0 6px 20px rgba(0,0,0,.5)}
@@ -269,7 +271,7 @@ function insertStyles() {
 .spotlight .trailer-container{position:absolute;top:0;left:0;width:100%;height:100%;z-index:20;opacity:0;pointer-events:none;transition:opacity .4s ease;background:#000;overflow:hidden}
 .spotlight .trailer-container.active{opacity:1;pointer-events:auto}
 .spotlight .trailer-iframe{width:100%;height:100%;border:none;display:block}
-.spotlight .trailer-controls{position:absolute;bottom:2rem;right:12rem;z-index:30;display:flex;gap:.8rem;opacity:0;transition:opacity .3s ease;pointer-events:none}
+.spotlight .trailer-controls{position:absolute;top:2rem;left:2rem;z-index:30;display:flex;gap:.8rem;opacity:0;transition:opacity .3s ease;pointer-events:none}
 .spotlight-container.trailer-playing:hover .trailer-controls{opacity:1;pointer-events:auto}
 .spotlight-container.trailer-playing .trailer-controls{opacity:1;pointer-events:auto}
 .spotlight .trailer-control-btn{width:48px;height:48px;border-radius:50%;background:rgba(0,0,0,.6);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s ease;color:#fff}
@@ -283,9 +285,10 @@ function insertStyles() {
 .spotlight .banner-item.show-trailer .banner-tagline,
 .spotlight .banner-item.show-trailer .banner-overview{opacity:0;pointer-events:none;transition:opacity .4s ease}
 .spotlight .banner-item.show-trailer .banner-logo{z-index:0}
-.spotlight .banner-item.show-trailer ~ .play-button-overlay,
-.spotlight .banner-item.show-trailer ~ .favorite-button-overlay,
-.spotlight .banner-item.show-trailer ~ .trailer-button-overlay{opacity:0;pointer-events:none;transition:opacity .4s ease}
+.spotlight-container.trailer-playing .play-button-overlay,
+.spotlight-container.trailer-playing .favorite-button-overlay,
+.spotlight-container.trailer-playing .trailer-button-overlay{opacity:0;pointer-events:none;transition:opacity .4s ease}
+.spotlight-container.trailer-playing .controls-wrapper{opacity:0;pointer-events:none;transition:opacity .4s ease}
 .spotlight .banner-item.show-trailer .banner-gradient-left,
 .spotlight .banner-item.show-trailer .banner-gradient-right,
 .spotlight .banner-item.show-trailer .banner-vignette-top,
