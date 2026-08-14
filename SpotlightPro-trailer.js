@@ -287,8 +287,6 @@ function insertStyles() {
 .spotlight .trailer-container{position:absolute;top:0;left:0;width:100%;height:100%;z-index:20;opacity:0;pointer-events:none;transition:opacity .4s ease;background:#000;overflow:hidden}
 .spotlight .trailer-container.active{opacity:1;pointer-events:auto}
 .spotlight .trailer-iframe{width:100%;height:100%;border:none;display:block;position:absolute;top:0;left:0}
-.spotlight .trailer-info-hide{position:absolute;top:0;left:0;width:100%;height:45px;background:#000;z-index:21;pointer-events:none;opacity:0;transition:opacity .5s ease}
-.spotlight .banner-item.show-trailer .trailer-info-hide{opacity:1}
 .spotlight .trailer-controls{position:absolute;top:2rem;right:2rem;z-index:30;display:flex;gap:.8rem;opacity:0;transition:opacity .3s ease;pointer-events:none}
 .spotlight.trailer-playing:hover .trailer-controls{opacity:1;pointer-events:auto}
 .spotlight.trailer-playing .trailer-controls{opacity:1;pointer-events:auto}
@@ -655,7 +653,6 @@ function createBannerElement(item, apiClient) {
     const trailerId = getItemTrailerId(item);
     if (trailerId && isTrailersEnabled()) {
         const tc = document.createElement("div"); tc.className = "trailer-container"; div.appendChild(tc);
-        const infoHide = document.createElement("div"); infoHide.className = "trailer-info-hide"; div.appendChild(infoHide);
         div.dataset.trailerId = trailerId;
     }
     return div;
