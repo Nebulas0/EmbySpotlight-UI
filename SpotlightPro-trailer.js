@@ -257,6 +257,8 @@ function insertStyles() {
     .spotlight .banner-meta-item{font-size:clamp(.8rem,2.5vw,1rem) !important}
     .spotlight .trailer-controls{top:.5rem !important;left:.5rem !important;right:auto !important;bottom:auto !important;gap:.4rem !important}
     .spotlight.trailer-playing .trailer-controls{opacity:1 !important;pointer-events:auto !important}
+    .spotlight.trailer-playing .arrow{opacity:.4 !important;pointer-events:auto !important}
+    .spotlight .trailer-seek-bar{opacity:1 !important}
     .spotlight .trailer-control-btn{width:36px !important;height:36px !important}
     .spotlight .trailer-control-btn svg{width:18px !important;height:18px !important}
     .spotlight .progress-bar-container{height:2px !important}
@@ -272,13 +274,17 @@ function insertStyles() {
 .spotlight .trailer-button svg{width:28px;height:28px;fill:#fff;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3))}
 .spotlight .trailer-container{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:100%;height:100%;z-index:20;opacity:0;pointer-events:none;transition:opacity .4s ease;background:#000;overflow:hidden}
 .spotlight .trailer-container.active{opacity:1;pointer-events:auto}
-.spotlight .trailer-iframe{width:100%;height:100%;border:none;display:block;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)}
+.spotlight .trailer-iframe{width:100%;height:100%;border:none;display:block;position:absolute;top:0;left:0}
 .spotlight .trailer-controls{position:absolute;top:2rem;left:2rem;z-index:30;display:flex;gap:.8rem;opacity:0;transition:opacity .3s ease;pointer-events:none}
 .spotlight.trailer-playing:hover .trailer-controls{opacity:1;pointer-events:auto}
 .spotlight.trailer-playing .trailer-controls{opacity:1;pointer-events:auto}
 .spotlight .trailer-control-btn{width:48px;height:48px;border-radius:50%;background:rgba(0,0,0,.6);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s ease;color:#fff}
 .spotlight .trailer-control-btn:hover{background:rgba(0,0,0,.8);transform:scale(1.05)}
 .spotlight .trailer-control-btn svg{width:24px;height:24px;fill:#fff}
+.spotlight .trailer-seek-bar{position:absolute;bottom:0;left:0;width:100%;height:4px;background:rgba(255,255,255,.2);z-index:31;cursor:pointer;opacity:0;transition:opacity .3s ease}
+.spotlight.trailer-playing:hover .trailer-seek-bar{opacity:1}
+.spotlight .trailer-seek-fill{height:100%;width:0%;background:#ff0000;transition:width .1s linear}
+.spotlight .trailer-seek-bar:hover .trailer-seek-fill{background:#ff3333}
 .spotlight .trailer-controls .trailer-control-btn:hover{background:rgba(255,255,255,.2)}
 .spotlight .banner-item.show-trailer .banner-logo,
 .spotlight .banner-item.show-trailer .banner-info,
@@ -291,6 +297,10 @@ function insertStyles() {
 .spotlight.trailer-playing .favorite-button-overlay,
 .spotlight.trailer-playing .trailer-button-overlay{opacity:0 !important;pointer-events:none !important;transition:opacity .4s ease}
 .spotlight.trailer-playing .controls-wrapper{opacity:0 !important;pointer-events:none !important;transition:opacity .4s ease}
+.spotlight.trailer-playing .arrow{opacity:0 !important;pointer-events:none !important;transition:opacity .3s ease}
+.spotlight.trailer-playing .trailer-controls{opacity:0 !important;pointer-events:none !important;transition:opacity .3s ease}
+.spotlight.trailer-playing:hover .arrow{opacity:.7 !important;pointer-events:auto !important}
+.spotlight.trailer-playing:hover .trailer-controls{opacity:1 !important;pointer-events:auto !important}
 .spotlight .banner-item.show-trailer .banner-gradient-left,
 .spotlight .banner-item.show-trailer .banner-gradient-right,
 .spotlight .banner-item.show-trailer .banner-vignette-top,
@@ -717,6 +727,12 @@ function buildSlider(items, apiClient) {
     trailerControls.appendChild(fullscreenBtn);
     trailerControls.appendChild(closeTrailerBtn);
     spotlight.appendChild(trailerControls);
+    const seekBar = document.createElement("div");
+    seekBar.className = "trailer-seek-bar";
+    const seekFill = document.createElement("div");
+    seekFill.className = "trailer-seek-fill";
+    seekBar.appendChild(seekFill);
+    spotlight.appendChild(seekBar);
     let progressBarFill = null;
     if (CONFIG.enableProgressBar) {
         const pbc = document.createElement("div"); pbc.className = "progress-bar-container";
@@ -724,7 +740,7 @@ function buildSlider(items, apiClient) {
         pbc.appendChild(progressBarFill); spotlight.appendChild(pbc);
     }
     container.appendChild(spotlight);
-    return { container, spotlight, slider, btnLeft, btnRight, controls, controlsWrapper, slideCounter, sliderWrapper, playButtonOverlay, favoriteButtonOverlay, progressBarFill, trailerButtonOverlay, trailerControls, unmuteBtn, fullscreenBtn, closeTrailerBtn };
+    return { container, spotlight, slider, btnLeft, btnRight, controls, controlsWrapper, slideCounter, sliderWrapper, playButtonOverlay, favoriteButtonOverlay, progressBarFill, trailerButtonOverlay, trailerControls, unmuteBtn, fullscreenBtn, closeTrailerBtn, seekBar, seekFill };
 }
 
 function playItem(itemId, serverId, apiClient) {
@@ -754,8 +770,7 @@ function attachSliderBehavior(state, apiClient) {
     let touchStartX = 0, touchStartY = 0, touchEndX = 0, touchEndY = 0, isSwiping = false, swipeStartTime = 0;
     let autoplayTimer = null, progressTimer = null, isAutoplayPaused = false;
     let trailerActive = false, trailerIframe = null, trailerMuted = true;
-    let trailerScaleFn = null;
-    function onYouTubeMessage(e) { try { if (typeof e.data !== 'string') return; const data = JSON.parse(e.data); if (data.event === 'initialDelivery' && data.info) { trailerIframe?.contentWindow.postMessage(JSON.stringify({ event: 'listening' }), '*'); return; } if (data.event === 'infoDelivery' && data.info) { if (data.info.playerState === 0) stopTrailer(); } } catch (err) {} }
+    function onYouTubeMessage(e) { try { if (typeof e.data !== 'string') return; const data = JSON.parse(e.data); if (data.event === 'initialDelivery' && data.info) { trailerIframe?.contentWindow.postMessage(JSON.stringify({ event: 'listening' }), '*'); return; } if (data.event === 'infoDelivery' && data.info) { if (data.info.playerState === 0) stopTrailer(); handleYouTubeInfoDelivery(data.info); } } catch (err) {} }
 
     function startProgress() {
         if (!progressBarFill || !CONFIG.enableProgressBar) return;
@@ -801,7 +816,9 @@ function attachSliderBehavior(state, apiClient) {
         spotlight.classList.remove('trailer-playing');
         trailerActive = false; trailerMuted = true;
         window.removeEventListener('message', onYouTubeMessage);
-        if (trailerScaleFn) { window.removeEventListener('resize', trailerScaleFn); trailerScaleFn = null; }
+        if (seekPollTimer) { clearInterval(seekPollTimer); seekPollTimer = null; }
+        if (state.seekFill) state.seekFill.style.width = '0%';
+        trailerDuration = 0;
         // Remove scale listener
         const oldScale = trailerIframe?.style.transform;
         const ub = state.trailerControls?.querySelector('.unmute-btn');
@@ -834,26 +851,8 @@ function attachSliderBehavior(state, apiClient) {
         trailerIframe.addEventListener('load', () => { try { trailerIframe.contentWindow.postMessage(JSON.stringify({ event: 'listening' }), '*'); } catch (err) {} });
         requestAnimationFrame(() => {
             tc.classList.add('active');
-            // Scale iframe to fill container (crop letterbox, hide YouTube controls)
-            trailerScaleFn = () => {
-                if (!trailerIframe || !trailerIframe.parentNode) return;
-                const cw = trailerIframe.parentNode.clientWidth;
-                const ch = trailerIframe.parentNode.clientHeight;
-                if (cw === 0 || ch === 0) return;
-                const targetRatio = 16 / 9;
-                const containerRatio = cw / ch;
-                let scale;
-                if (containerRatio > targetRatio) {
-                    // Container wider than 16:9 — scale to fill width
-                    scale = cw / (ch * targetRatio);
-                } else {
-                    // Container taller than 16:9 — scale to fill height
-                    scale = ch / (cw / targetRatio);
-                }
-                trailerIframe.style.transform = `translate(-50%,-50%) scale(${Math.max(scale, 1)})`;
-            };
-            setTimeout(trailerScaleFn, 100);
-            window.addEventListener('resize', trailerScaleFn);
+            // Start seek bar polling
+            startSeekBarPolling();
         });
     }
     function toggleTrailerMute() {
@@ -869,6 +868,27 @@ function attachSliderBehavior(state, apiClient) {
         if (ub) {
             if (trailerMuted) { ub.innerHTML = `<svg viewBox="0 0 24 24"><path d="M12,4L9.91,6.09L12,8.18M4.27,3L3,4.27L7.73,9H3V15H7L12,20V13.27L16.25,17.52C15.59,18 14.84,18.35 14,18.53V20.59C15.28,20.38 16.5,19.9 17.5,19.18L19.73,21.41L21,20.14L4.27,3M19,12C19,12.82 18.86,13.61 18.61,14.34L20.12,15.85C20.68,14.66 21,13.37 21,12C21,7.72 18,4.14 14,3.23V5.29C16.89,6.15 19,8.83 19,12M12,4L9.91,6.09L12,8.18V4Z"/></svg>`; ub.title = "Unmute"; }
             else { ub.innerHTML = `<svg viewBox="0 0 24 24"><path d="M3,9V15H7L12,20V4L7,9H3M16.5,12C16.5,10.83 15.92,9.79 15,9.14V14.86C15.92,14.21 16.5,13.17 16.5,12M14,3.23V5.29C16.89,6.15 19,8.83 19,12C19,15.17 16.89,17.85 14,18.71V20.77C18,19.86 21,16.28 21,12C21,7.72 18,4.14 14,3.23Z"/></svg>`; ub.title = "Mute"; }
+        }
+    }
+    let seekPollTimer = null;
+    function startSeekBarPolling() {
+        if (seekPollTimer) clearInterval(seekPollTimer);
+        // Request initial state
+        try { trailerIframe?.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'getDuration', args: [] }), '*'); } catch (e) {}
+        seekPollTimer = setInterval(() => {
+            if (!trailerIframe || !trailerActive) { clearInterval(seekPollTimer); return; }
+            try {
+                trailerIframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'getCurrentTime', args: [] }), '*');
+                trailerIframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'getDuration', args: [] }), '*');
+            } catch (e) {}
+        }, 250);
+    }
+    let trailerDuration = 0;
+    function handleYouTubeInfoDelivery(info) {
+        if (info.duration != null) trailerDuration = info.duration;
+        if (info.currentTime != null && trailerDuration > 0) {
+            const pct = (info.currentTime / trailerDuration) * 100;
+            if (state.seekFill) state.seekFill.style.width = pct + '%';
         }
     }
     function updateTrailerButtonVisibility() {
@@ -1007,6 +1027,7 @@ function attachSliderBehavior(state, apiClient) {
     if (trailerBtnOverlay) trailerBtnOverlay.addEventListener("click", (e) => { e.stopPropagation(); if (trailerActive) stopTrailer(); else startTrailer(); });
     if (state.unmuteBtn) state.unmuteBtn.addEventListener("click", (e) => { e.stopPropagation(); toggleTrailerMute(); });
     if (state.closeTrailerBtn) state.closeTrailerBtn.addEventListener("click", (e) => { e.stopPropagation(); stopTrailer(); });
+    if (state.seekBar) state.seekBar.addEventListener("click", (e) => { e.stopPropagation(); if (!trailerIframe || trailerDuration <= 0) return; const rect = state.seekBar.getBoundingClientRect(); const pct = (e.clientX - rect.left) / rect.width; const time = pct * trailerDuration; try { trailerIframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'seekTo', args: [time, true] }), '*'); } catch (err) {} });
     if (state.fullscreenBtn) state.fullscreenBtn.addEventListener("click", (e) => { e.stopPropagation(); const vi = slider.children[currentIndex]; const tc = vi?.querySelector('.trailer-container'); const iframe = tc?.querySelector('.trailer-iframe'); if (iframe) { if (iframe.requestFullscreen) iframe.requestFullscreen(); else if (iframe.webkitRequestFullscreen) iframe.webkitRequestFullscreen(); } });
     if (favoriteButtonOverlay) favoriteButtonOverlay.addEventListener("click", async (e) => {
         e.stopPropagation(); const vi = slider.children[currentIndex];
@@ -1053,13 +1074,13 @@ async function init() {
         if (!items?.length) { SPOTLIGHT_INITIALIZED = false; return; }
         // Don't wait for preloadImages — buildSlider has progressive loading.
         // Show the slider immediately with low-res images that upgrade to full-res.
-        const { container, spotlight, slider, btnLeft, btnRight, controls, controlsWrapper, slideCounter, favoriteButtonOverlay, progressBarFill, trailerButtonOverlay, trailerControls, unmuteBtn, fullscreenBtn, closeTrailerBtn } = buildSlider(items, apiClient);
+        const { container, spotlight, slider, btnLeft, btnRight, controls, controlsWrapper, slideCounter, favoriteButtonOverlay, progressBarFill, trailerButtonOverlay, trailerControls, unmuteBtn, fullscreenBtn, closeTrailerBtn, seekBar, seekFill } = buildSlider(items, apiClient);
         const reference = home.querySelector ? home.querySelector(".homeSectionsContainer") : null;
         if (reference?.parentNode) reference.parentNode.insertBefore(container, reference);
         else home.insertBefore(container, home.firstChild);
         const loader = container.querySelector(".loader");
         if (loader) loader.style.display = "none";
-        const sliderState = { slider, itemsCount: items.length, btnLeft, btnRight, controls, controlsWrapper, slideCounter, spotlight, favoriteButtonOverlay, progressBarFill, container, trailerButtonOverlay, trailerControls, unmuteBtn, fullscreenBtn, closeTrailerBtn };
+        const sliderState = { slider, itemsCount: items.length, btnLeft, btnRight, controls, controlsWrapper, slideCounter, spotlight, favoriteButtonOverlay, progressBarFill, container, trailerButtonOverlay, trailerControls, unmuteBtn, fullscreenBtn, closeTrailerBtn, seekBar, seekFill };
         sliderState.preloadNext = async function() { if (!STATE.nextGroupReady) await preloadNextGroup(apiClient); };
         sliderState.onCycleComplete = function() {
             if (STATE.nextGroupReady) {
