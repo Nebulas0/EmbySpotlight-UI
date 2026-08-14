@@ -284,9 +284,9 @@ function insertStyles() {
 .spotlight .trailer-button{width:64px;height:64px;border-radius:50%;background:rgba(55,55,55,.3);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.4)}
 .spotlight .trailer-button:hover{transform:scale(1.02);background:${CONFIG.playbuttonColor};box-shadow:0 6px 20px rgba(0,0,0,.5)}
 .spotlight .trailer-button svg{width:28px;height:28px;fill:#fff;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3))}
-.spotlight .trailer-container{position:absolute;top:0;left:0;width:100%;height:100%;z-index:20;opacity:0;pointer-events:none;transition:opacity .4s ease;background:#000;overflow:hidden}
+.spotlight .trailer-container{position:absolute;top:0;left:0;width:100% !important;height:100% !important;z-index:20;opacity:0;pointer-events:none;transition:opacity .4s ease;background:#000;overflow:hidden}
 .spotlight .trailer-container.active{opacity:1;pointer-events:auto}
-.spotlight .trailer-iframe{width:100%;height:100%;border:none;display:block;position:absolute;top:0;left:0}
+.spotlight .trailer-iframe{width:100% !important;height:100% !important;border:none !important;display:block;position:absolute;top:0;left:0}
 .spotlight .trailer-controls{position:absolute;top:2rem;right:2rem;z-index:30;display:flex;gap:.8rem;opacity:0;transition:opacity .3s ease;pointer-events:none}
 .spotlight.trailer-playing:hover .trailer-controls{opacity:1;pointer-events:auto}
 .spotlight.trailer-playing .trailer-controls{opacity:1;pointer-events:auto}
@@ -858,6 +858,8 @@ function attachSliderBehavior(state, apiClient) {
             // which gives us getCurrentTime, getDuration, seekTo, mute, unMute, etc.
             if (ytApiReady && window.YT && window.YT.Player) {
                 trailerPlayer = new window.YT.Player(tc, {
+                    width: '100%',
+                    height: '100%',
                     videoId: trailerId,
                     playerVars: {
                         autoplay: 1,
@@ -875,6 +877,12 @@ function attachSliderBehavior(state, apiClient) {
                         onReady: (e) => {
                             trailerIframe = e.target.getIframe();
                             trailerIframe.className = 'trailer-iframe';
+                            trailerIframe.style.width = '100%';
+                            trailerIframe.style.height = '100%';
+                            trailerIframe.style.position = 'absolute';
+                            trailerIframe.style.top = '0';
+                            trailerIframe.style.left = '0';
+                            trailerIframe.style.border = 'none';
                             if (CONFIG.trailerStartMuted) { e.target.mute(); } else { e.target.unMute(); e.target.setVolume(100); }
                             startSeekBarPolling();
                         },
