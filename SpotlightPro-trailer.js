@@ -234,7 +234,7 @@ function insertStyles() {
 .spotlight .progress-bar-fill{height:100%;width:0%;background:${frameColor};transition:width .1s linear;box-shadow:0 0 8px ${frameColor}}
 .spotlight .progress-bar-fill.paused{transition:none}
 /* === Trailer Support === */
-.spotlight .trailer-button-overlay{position:absolute;top:2rem;right:12rem;z-index:25;opacity:0;transition:opacity .3s ease;pointer-events:none}
+.spotlight .trailer-button-overlay{position:absolute;top:2rem;right:7rem;z-index:25;opacity:0;transition:opacity .3s ease;pointer-events:none}
 .spotlight-container:hover .trailer-button-overlay{opacity:1;pointer-events:all}
 .spotlight .trailer-button{width:80px;height:80px;border-radius:50%;background:rgba(55,55,55,.3);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.4)}
 .spotlight .trailer-button:hover{transform:scale(1.02);background:${CONFIG.playbuttonColor};box-shadow:0 6px 20px rgba(0,0,0,.5)}
