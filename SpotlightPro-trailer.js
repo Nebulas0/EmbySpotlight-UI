@@ -237,28 +237,29 @@ function insertStyles() {
 
 /* === Mobile Responsive === */
 @media (max-width:768px),(orientation:portrait){
-    .spotlight-container.spotlight-pro{width:94%;margin-top:5.5rem;margin-bottom:-4rem}
+    .spotlight-container.spotlight-pro{width:100%;margin-top:6.5rem;margin-bottom:-5rem;border-radius:0}
     .spotlight .banner-slider-wrapper{border-radius:0}
-    .spotlight .play-button-overlay{top:1rem;right:1rem}
-    .spotlight .favorite-button-overlay{top:1rem;left:1rem}
-    .spotlight .trailer-button-overlay{top:1rem;right:5.5rem}
-    .spotlight .play-button,.spotlight .favorite-button,.spotlight .trailer-button{width:48px;height:48px;box-shadow:0 2px 8px rgba(0,0,0,.4)}
-    .spotlight .play-button svg{width:24px;height:24px;margin-left:3px}
-    .spotlight .favorite-button svg{width:24px;height:24px}
-    .spotlight .trailer-button svg{width:22px;height:22px}
-    .spotlight .arrow{width:36px;height:36px;opacity:.5}
-    .spotlight .arrow svg{width:32px;height:32px}
-    .spotlight .banner-logo{max-width:70%;max-height:35%}
-    .spotlight .banner-title{font-size:clamp(1.2rem,5vw,2rem)}
-    .spotlight .banner-info{left:1rem;bottom:1rem;max-width:85%}
+    .spotlight .banner-cover{height:min(56vmax,40vh)}
+    .spotlight .play-button-overlay{top:.5rem;right:.5rem;opacity:1;pointer-events:auto}
+    .spotlight .favorite-button-overlay{top:.5rem;left:.5rem;opacity:1;pointer-events:auto}
+    .spotlight .trailer-button-overlay{top:.5rem;right:4rem;opacity:1;pointer-events:auto}
+    .spotlight .play-button,.spotlight .favorite-button,.spotlight .trailer-button{width:40px;height:40px;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+    .spotlight .play-button svg{width:20px;height:20px;margin-left:2px}
+    .spotlight .favorite-button svg{width:20px;height:20px}
+    .spotlight .trailer-button svg{width:18px;height:18px}
+    .spotlight .arrow{width:32px;height:32px;opacity:.4}
+    .spotlight .arrow svg{width:28px;height:28px}
+    .spotlight .banner-logo{max-width:65%;max-height:30%}
+    .spotlight .banner-title{font-size:clamp(1rem,4vw,1.5rem)}
+    .spotlight .banner-info{left:.8rem;bottom:.8rem;max-width:90%}
     .spotlight .banner-info-backdrop{backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
-    .spotlight .trailer-controls{top:1rem;left:1rem;gap:.5rem}
-    .spotlight .trailer-control-btn{width:40px;height:40px}
-    .spotlight .trailer-control-btn svg{width:20px;height:20px}
-    .spotlight .play-button-overlay,.spotlight .favorite-button-overlay,.spotlight .trailer-button-overlay{opacity:1;pointer-events:auto}
-    .spotlight .trailer-controls{opacity:1;pointer-events:auto}
+    .spotlight .banner-genre{font-size:clamp(.8rem,2.5vw,1rem);padding:.1rem .5rem}
+    .spotlight .banner-meta-item{font-size:clamp(.8rem,2.5vw,1rem)}
+    .spotlight .trailer-controls{top:.5rem;left:.5rem;gap:.4rem;opacity:1;pointer-events:auto}
+    .spotlight .trailer-control-btn{width:36px;height:36px}
+    .spotlight .trailer-control-btn svg{width:18px;height:18px}
     .spotlight .progress-bar-container{height:2px}
-    .spotlight .controls-wrapper{right:1rem;bottom:1rem}
+    .spotlight .controls-wrapper{right:.5rem;bottom:.5rem}
 }
 
 .spotlight .progress-bar-fill.paused{transition:none}
@@ -268,12 +269,12 @@ function insertStyles() {
 .spotlight .trailer-button{width:64px;height:64px;border-radius:50%;background:rgba(55,55,55,.3);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.4)}
 .spotlight .trailer-button:hover{transform:scale(1.02);background:${CONFIG.playbuttonColor};box-shadow:0 6px 20px rgba(0,0,0,.5)}
 .spotlight .trailer-button svg{width:28px;height:28px;fill:#fff;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3))}
-.spotlight .trailer-container{position:absolute;top:0;left:0;width:100%;height:100%;z-index:20;opacity:0;pointer-events:none;transition:opacity .4s ease;background:#000;overflow:hidden}
+.spotlight .trailer-container{position:absolute;top:0;left:0;width:100%;height:100%;z-index:20;opacity:0;pointer-events:none;transition:opacity .4s ease;background:#000;overflow:hidden;display:flex;align-items:center;justify-content:center}
 .spotlight .trailer-container.active{opacity:1;pointer-events:auto}
-.spotlight .trailer-iframe{width:100%;height:100%;border:none;display:block}
+.spotlight .trailer-iframe{width:100%;height:100%;border:none;display:block;position:absolute;top:0;left:0;object-fit:cover}
 .spotlight .trailer-controls{position:absolute;top:2rem;left:2rem;z-index:30;display:flex;gap:.8rem;opacity:0;transition:opacity .3s ease;pointer-events:none}
-.spotlight-container.trailer-playing:hover .trailer-controls{opacity:1;pointer-events:auto}
-.spotlight-container.trailer-playing .trailer-controls{opacity:1;pointer-events:auto}
+.spotlight.trailer-playing:hover .trailer-controls{opacity:1;pointer-events:auto}
+.spotlight.trailer-playing .trailer-controls{opacity:1;pointer-events:auto}
 .spotlight .trailer-control-btn{width:48px;height:48px;border-radius:50%;background:rgba(0,0,0,.6);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s ease;color:#fff}
 .spotlight .trailer-control-btn:hover{background:rgba(0,0,0,.8);transform:scale(1.05)}
 .spotlight .trailer-control-btn svg{width:24px;height:24px;fill:#fff}
@@ -285,10 +286,10 @@ function insertStyles() {
 .spotlight .banner-item.show-trailer .banner-tagline,
 .spotlight .banner-item.show-trailer .banner-overview{opacity:0;pointer-events:none;transition:opacity .4s ease}
 .spotlight .banner-item.show-trailer .banner-logo{z-index:0}
-.spotlight-container.trailer-playing .play-button-overlay,
-.spotlight-container.trailer-playing .favorite-button-overlay,
-.spotlight-container.trailer-playing .trailer-button-overlay{opacity:0;pointer-events:none;transition:opacity .4s ease}
-.spotlight-container.trailer-playing .controls-wrapper{opacity:0;pointer-events:none;transition:opacity .4s ease}
+.spotlight.trailer-playing .play-button-overlay,
+.spotlight.trailer-playing .favorite-button-overlay,
+.spotlight.trailer-playing .trailer-button-overlay{opacity:0 !important;pointer-events:none !important;transition:opacity .4s ease}
+.spotlight.trailer-playing .controls-wrapper{opacity:0 !important;pointer-events:none !important;transition:opacity .4s ease}
 .spotlight .banner-item.show-trailer .banner-gradient-left,
 .spotlight .banner-item.show-trailer .banner-gradient-right,
 .spotlight .banner-item.show-trailer .banner-vignette-top,
