@@ -677,8 +677,23 @@ function getNextGroupFromPool() {
 
 async function preloadNextGroup(apiClient) {
     if (STATE.nextGroupReady) return STATE.nextGroupReady;
-    const group = getNextGroupFromPool();
+    let group = getNextGroupFromPool();
     if (!group?.length) return null;
+    // Items from the background batch have MINIMAL_FIELDS (no Overview,
+    // Genres, CommunityRating, Taglines, etc.). Fetch full metadata for
+    // the display items so the UI shows text and ratings correctly.
+    const needsMetadata = group.filter(i => !i.Overview && !i.CommunityRating && i.Genres === undefined);
+    if (needsMetadata.length > 0) {
+        try {
+            const ids = needsMetadata.map(i => i.Id).join(',');
+            const q = { Ids: ids, Fields: FULL_FIELDS, EnableImageTypes: "Primary,Backdrop,Thumb,Logo,Banner" };
+            const result = await apiClient.getItems(apiClient.getCurrentUserId(), q);
+            const fullItems = result?.Items || [];
+            const fullMap = new Map(fullItems.map(i => [i.Id, i]));
+            group = group.map(i => fullMap.get(i.Id) || i);
+            console.log(`[SpotlightTrailer] Enriched ${fullItems.length} items with full metadata`);
+        } catch (e) { /* ignore — use minimal data */ }
+    }
     if (CONFIG.enablePreloading) await preloadImages(group, apiClient);
     STATE.nextGroupReady = group;
     return group;
