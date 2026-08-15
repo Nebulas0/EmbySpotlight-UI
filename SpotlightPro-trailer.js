@@ -121,6 +121,7 @@ const STATE = {
     usedStartIndices: new Set(),
     isFetchingBatch: false,
     parentIsBoxSet: false,
+    parentCollectionType: null,
     apiClient: null,
     nextGroupReady: null
 };
@@ -503,18 +504,22 @@ async function fetchInitialGroup(apiClient, parentId) {
 
     if (CONFIG.balancedMovieSeries) {
         // FAST INITIAL FETCH: fetch limit*2 items per type with full metadata.
-        // Use a random startIndex so each page load shows different items,
-        // not always the same 20 newest. If the random start is too high
-        // (beyond available items), retry from 0.
+        // Use a random startIndex so each page load shows different items.
+        // Skip movie or series query if the library's CollectionType
+        // tells us only one type exists (saves ~0.4s for movies-only
+        // or TV-only libraries).
         const initSize = CONFIG.limit * 2; // 20 per type
         const movieStart = Math.floor(Math.random() * 500);
         const seriesStart = Math.floor(Math.random() * 500);
-        const movieQ = buildQuery(parentId, { limit: initSize, startIndex: movieStart, enableTotal: true, itemType: "Movie" });
-        const seriesQ = buildQuery(parentId, { limit: initSize, startIndex: seriesStart, enableTotal: true, itemType: "Series" });
-        const [movieResult, seriesResult] = await Promise.all([
-            apiClient.getItems(apiClient.getCurrentUserId(), movieQ),
-            apiClient.getItems(apiClient.getCurrentUserId(), seriesQ)
-        ]);
+        const fetchMovies = STATE.parentCollectionType !== 'tvshows';
+        const fetchSeries = STATE.parentCollectionType !== 'movies';
+        const queries = [];
+        if (fetchMovies) queries.push(apiClient.getItems(apiClient.getCurrentUserId(), buildQuery(parentId, { limit: initSize, startIndex: movieStart, enableTotal: true, itemType: "Movie" })));
+        if (fetchSeries) queries.push(apiClient.getItems(apiClient.getCurrentUserId(), buildQuery(parentId, { limit: initSize, startIndex: seriesStart, enableTotal: true, itemType: "Series" })));
+        const results = await Promise.all(queries);
+        let resultIdx = 0;
+        const movieResult = fetchMovies ? results[resultIdx++] : { Items: [], TotalRecordCount: 0 };
+        const seriesResult = fetchSeries ? results[resultIdx++] : { Items: [], TotalRecordCount: 0 };
         const movieTotal = movieResult?.TotalRecordCount || 0;
         const seriesTotal = seriesResult?.TotalRecordCount || 0;
         STATE.totalRecordCount = movieTotal + seriesTotal;
@@ -599,20 +604,30 @@ async function fetchBatch(apiClient, parentId) {
         const batchSize = CONFIG.spotlightBatchSize;
         const existingIds = new Set(STATE.itemPool.map(i => i.Id));
         if (CONFIG.balancedMovieSeries) {
+            const fetchMovies = STATE.parentCollectionType !== 'tvshows';
+            const fetchSeries = STATE.parentCollectionType !== 'movies';
             const half = Math.floor(batchSize / 2);
-            // Use minimal Fields for background pool — saves ~70% payload
-            const movieQ = buildQuery(parentId, { limit: half, startIndex: getRandomStartIndex(half), enableTotal: false, itemType: "Movie" });
-            const seriesQ = buildQuery(parentId, { limit: batchSize - half, startIndex: getRandomStartIndex(batchSize - half), enableTotal: false, itemType: "Series" });
-            movieQ.Fields = MINIMAL_FIELDS;
-            seriesQ.Fields = MINIMAL_FIELDS;
-            const [movieResult, seriesResult] = await Promise.all([
-                apiClient.getItems(apiClient.getCurrentUserId(), movieQ),
-                apiClient.getItems(apiClient.getCurrentUserId(), seriesQ)
-            ]);
-            const movies = filterAndResolveSeries(apiClient, movieResult?.Items || []);
-            const series = filterAndResolveSeries(apiClient, seriesResult?.Items || []);
-            STATE.itemPool.push(...movies.filter(i => !existingIds.has(i.Id)));
-            STATE.itemPool.push(...series.filter(i => !existingIds.has(i.Id)));
+            const batchQueries = [];
+            if (fetchMovies) {
+                const movieQ = buildQuery(parentId, { limit: half, startIndex: getRandomStartIndex(half), enableTotal: false, itemType: "Movie" });
+                movieQ.Fields = MINIMAL_FIELDS;
+                batchQueries.push(apiClient.getItems(apiClient.getCurrentUserId(), movieQ));
+            }
+            if (fetchSeries) {
+                const seriesQ = buildQuery(parentId, { limit: batchSize - half, startIndex: getRandomStartIndex(batchSize - half), enableTotal: false, itemType: "Series" });
+                seriesQ.Fields = MINIMAL_FIELDS;
+                batchQueries.push(apiClient.getItems(apiClient.getCurrentUserId(), seriesQ));
+            }
+            const results = await Promise.all(batchQueries);
+            let idx = 0;
+            if (fetchMovies) {
+                const movies = filterAndResolveSeries(apiClient, results[idx++]?.Items || []);
+                STATE.itemPool.push(...movies.filter(i => !existingIds.has(i.Id)));
+            }
+            if (fetchSeries) {
+                const series = filterAndResolveSeries(apiClient, results[idx++]?.Items || []);
+                STATE.itemPool.push(...series.filter(i => !existingIds.has(i.Id)));
+            }
         } else {
             const startIndex = getRandomStartIndex(batchSize);
             const q = buildQuery(parentId, { limit: batchSize, startIndex, enableTotal: false });
@@ -677,10 +692,12 @@ async function fetchStandardItems(apiClient) {
                 const parent = await apiClient.getItem(apiClient.getCurrentUserId(), parentId);
                 if (parent && (parent.Type === "BoxSet" || parent.Type === "Playlist")) {
                     STATE.parentIsBoxSet = true;
+                    STATE.parentCollectionType = null; // BoxSets can have both
                     console.log('[SpotlightTrailer] Parent is ' + parent.Type + ' ("' + parent.Name + '") — Recursive=false');
                 } else {
                     STATE.parentIsBoxSet = false;
-                    console.log('[SpotlightTrailer] Parent is ' + parent.Type + ' ("' + parent.Name + '") — Recursive=true');
+                    STATE.parentCollectionType = parent?.CollectionType || null;
+                    console.log('[SpotlightTrailer] Parent is ' + parent.Type + ' ("' + parent.Name + '", collection: ' + (STATE.parentCollectionType || 'mixed') + ') — Recursive=true');
                 }
             } catch (e) {
                 STATE.parentIsBoxSet = false;
