@@ -72,7 +72,11 @@ const CONFIG = {
     enablePlayText: false,
     enableGenreClick: true,
     enableTrailers: true,
-    trailerStartMuted: false
+    trailerStartMuted: false,
+    // Which library to scope genre button navigation to.
+    // Set to a library ID (e.g. 2310256) to scope genres to that library.
+    // Set to null to show genres across ALL libraries (no ParentId filter).
+    genreLibraryId: null
 };
 
 
@@ -483,12 +487,24 @@ async function fetchInitialGroup(apiClient, parentId) {
         console.log(`[SpotlightTrailer] Total unplayed items: ${STATE.totalRecordCount}`);
     }
     let allItems = (result?.Items || []);
-    // If we got fewer than requested and total is large, the start was too high
-    // — fall back to startIndex=0 in a single quick retry
-    if (allItems.length < CONFIG.limit && STATE.totalRecordCount > fetchSize) {
+    // If we got fewer items than needed (random start was too high for a
+    // small library/collection, or IsPlayed filtered most out), retry from 0.
+    // This fixes collections with fewer items than fetchSize.
+    if (allItems.length < CONFIG.limit && STATE.totalRecordCount > 0) {
         const q2 = buildQuery(parentId, { limit: fetchSize, startIndex: 0, enableTotal: false });
         const result2 = await apiClient.getItems(apiClient.getCurrentUserId(), q2);
         allItems = result2?.Items || [];
+    }
+    // Secondary fallback: if IsPlayed filter returned 0 items but the
+    // collection/library has items, retry without the played filter.
+    // (Curated collections may have all-watched items; still worth showing.)
+    if (allItems.length === 0 && CONFIG.unplayedOnly) {
+        const q3 = buildQuery(parentId, { limit: fetchSize, startIndex: 0, enableTotal: true });
+        delete q3.IsPlayed;
+        const result3 = await apiClient.getItems(apiClient.getCurrentUserId(), q3);
+        if (result3?.TotalRecordCount != null) STATE.totalRecordCount = result3.TotalRecordCount;
+        allItems = result3?.Items || [];
+        if (allItems.length > 0) console.log('[SpotlightTrailer] IsPlayed filter removed — showing all items (collection may be fully watched)');
     }
     console.log(`[SpotlightTrailer] Initial fetch returned ${allItems.length} items`);
     if (allItems.length <= CONFIG.limit) return allItems;
@@ -552,7 +568,11 @@ async function fetchStandardItems(apiClient) {
 async function navigateToGenre(genre, apiClient) {
     try {
         const sid = getServerId(apiClient);
-        const parentId = CONFIG.collectionId || CONFIG.libraryId || '';
+        // Genre buttons use genreLibraryId if set, otherwise no ParentId
+        // (shows genres across all libraries). This is independent from the
+        // spotlight's collectionId/libraryId so that genre clicks on a
+        // collection-based spotlight still navigate to a real library.
+        const parentId = CONFIG.genreLibraryId || '';
         const userId = apiClient.getCurrentUserId();
         const token = apiClient.accessToken ? apiClient.accessToken() : null;
 
