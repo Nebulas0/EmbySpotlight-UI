@@ -59,6 +59,10 @@ const CONFIG = {
     enableSwipe: true,
     swipeThreshold: 50,
     spotlightBatchSize: 250,
+    // Maximum random StartIndex for batch fetching. Keeps items near the
+    // top of the year-sorted list (newest). Set to 0 to always start from
+    // the newest. Default 2000 covers roughly the last 2-3 years.
+    maxRandomStart: 2000,
     autoAdvanceOnCycle: true,
     unplayedOnly: true,
     enableProgressBar: true,
@@ -492,11 +496,12 @@ async function fetchItems(apiClient) {
 function getRandomStartIndex(batchSize) {
     const total = STATE.totalRecordCount;
     if (!total || total <= batchSize) return 0;
-    const maxStart = total - batchSize;
-    // Use fine-grained random: pick any start from 0 to maxStart
-    // Track used ranges to avoid repeating the same window
-    const chosen = Math.floor(Math.random() * (maxStart + 1));
-    return chosen;
+    // Cap the random start to keep items near the top of the year-sorted
+    // list (newest). Without this cap, the random start could land at
+    // position 50,000+ and fetch items from decades ago.
+    const maxStart = Math.min(total - batchSize, CONFIG.maxRandomStart);
+    if (maxStart <= 0) return 0;
+    return Math.floor(Math.random() * (maxStart + 1));
 }
 
 async function fetchInitialGroup(apiClient, parentId) {
@@ -509,8 +514,8 @@ async function fetchInitialGroup(apiClient, parentId) {
         // tells us only one type exists (saves ~0.4s for movies-only
         // or TV-only libraries).
         const initSize = CONFIG.limit * 2; // 20 per type
-        const movieStart = Math.floor(Math.random() * 500);
-        const seriesStart = Math.floor(Math.random() * 500);
+        const movieStart = Math.floor(Math.random() * Math.min(500, CONFIG.maxRandomStart));
+        const seriesStart = Math.floor(Math.random() * Math.min(500, CONFIG.maxRandomStart));
         const fetchMovies = STATE.parentCollectionType !== 'tvshows';
         const fetchSeries = STATE.parentCollectionType !== 'movies';
         const queries = [];
