@@ -53,7 +53,6 @@ const CONFIG = {
     marginBottom: "-6.5rem",
     playbuttonColor: "hsl(var(--theme-primary-color-hue), var(--theme-primary-color-saturation), var(--theme-primary-color-lightness))",
     favoriteButtonColor: "hsl(var(--theme-primary-color-hue), var(--theme-primary-color-saturation), var(--theme-primary-color-lightness))",
-    customItemsFile: "spotlight-items.txt",
     collectionId: null,
     libraryId: 2310256,
     enablePreloading: true,
@@ -427,18 +426,6 @@ async function toggleFavorite(itemId, apiClient, isFavorite) {
     return isFavorite;
 }
 
-async function loadCustomItemsList() {
-    try {
-        const response = await fetch(`${CONFIG.customItemsFile}?t=${Date.now()}`, {
-            cache: 'no-store', headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
-        });
-        if (!response.ok) { if (response.status === 404) return null; throw new Error(`HTTP ${response.status}`); }
-        const text = await response.text();
-        const ids = text.split('\n').map(l => l.trim()).filter(l => l.length > 0 && !l.startsWith('#')).filter(l => /^[a-zA-Z0-9]+$/.test(l));
-        return ids.length > 0 ? ids : null;
-    } catch (e) { return null; }
-}
-
 // Filter results to only Movie/Series types. Episodes and Seasons are
 // resolved to their parent Series so the spotlight shows the show, not
 // individual episodes. Duplicates are removed.
@@ -480,46 +467,7 @@ async function resolveParentSeries(apiClient, userId, parentId) {
     } catch (e) { return null; }
 }
 
-async function fetchItemsByIds(apiClient, itemIds) {
-    try {
-        const items = [], userId = apiClient.getCurrentUserId();
-        const shuffledIds = shuffleArray(itemIds);
-        for (const itemId of shuffledIds.slice(0, Math.min(CONFIG.limit * 2, shuffledIds.length))) {
-            try {
-                const item = await apiClient.getItem(userId, itemId);
-                if (item) {
-                    if (item.Type === "BoxSet" || item.CollectionType === "boxsets") {
-                        const ci = await apiClient.getItems(userId, { ParentId: itemId, Recursive: true, IncludeItemTypes: "Movie,Series", Limit: CONFIG.limit, SortBy: "Random", Fields: "PrimaryImageAspectRatio,BackdropImageTags,ImageTags,ParentLogoImageTag,ParentLogoItemId,CriticRating,CommunityRating,OfficialRating,PremiereDate,ProductionYear,Genres,RunTimeTicks,Taglines,Overview,RemoteTrailers" });
-                        if (ci?.Items) items.push(...ci.Items);
-                    } else if (item.Type === "Episode" || item.Type === "Season") {
-                        // Resolve episodes/seasons to their parent Series so the
-                        // spotlight shows the show itself, not individual episodes.
-                        const seriesId = item.SeriesId || (item.ParentId ? await resolveParentSeries(apiClient, userId, item.ParentId) : null);
-                        if (seriesId) {
-                            const series = await apiClient.getItem(userId, seriesId);
-                            if (series && series.Type === "Series") {
-                                if (!items.some(i => i.Id === series.Id)) items.push(series);
-                            }
-                        } else if (item.Type === "Season") {
-                            items.push(item); // fallback: show season if no series found
-                        }
-                        // Episodes without a resolvable series are skipped
-                    } else items.push(item);
-                }
-                if (items.length >= CONFIG.limit) break;
-            } catch (e) { /* skip */ }
-        }
-        return items;
-    } catch (e) { return []; }
-}
-
 async function fetchItems(apiClient) {
-    const customIds = await loadCustomItemsList();
-    if (customIds?.length > 0) {
-        const items = await fetchItemsByIds(apiClient, customIds);
-        if (items.length === 0) return fetchStandardItems(apiClient);
-        return shuffleArray(items).slice(0, Math.min(CONFIG.limit, items.length));
-    }
     return fetchStandardItems(apiClient);
 }
 
