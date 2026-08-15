@@ -109,6 +109,7 @@ const STATE = {
     totalRecordCount: null,
     usedStartIndices: new Set(),
     isFetchingBatch: false,
+    parentIsBoxSet: false,
     apiClient: null,
     nextGroupReady: null
 };
@@ -376,7 +377,7 @@ function insertStyles() {
 function buildQuery(parentId, options) {
     options = options || {};
     const q = {
-        IncludeItemTypes: "Movie,Series", Recursive: true,
+        IncludeItemTypes: STATE.parentIsBoxSet ? "Series,Movie" : "Movie,Series", Recursive: true,
         SortBy: "ProductionYear,SortName", SortOrder: "Descending",
         EnableImageTypes: "Primary,Backdrop,Thumb,Logo,Banner",
         EnableUserData: true,
@@ -426,45 +427,22 @@ async function toggleFavorite(itemId, apiClient, isFavorite) {
     return isFavorite;
 }
 
-// Filter results to only Movie/Series types. Episodes and Seasons are
-// resolved to their parent Series so the spotlight shows the show, not
-// individual episodes. Duplicates are removed.
-async function filterAndResolveSeries(apiClient, items) {
+// Fast filter: keep only Movie/Series items, drop everything else.
+// No API calls — episodes/seasons are simply skipped (the query should
+// already filter them, but some BoxSet/collection parents return episodes
+// regardless of IncludeItemTypes). Duplicates are removed.
+function filterAndResolveSeries(apiClient, items) {
     if (!items || items.length === 0) return items;
-    const userId = apiClient.getCurrentUserId();
     const result = [];
     const seenIds = new Set();
     for (const item of items) {
         if (!item) continue;
-        if (item.Type === "Movie" || item.Type === "Series") {
-            if (!seenIds.has(item.Id)) { seenIds.add(item.Id); result.push(item); }
-        } else if (item.Type === "Episode" || item.Type === "Season") {
-            const seriesId = item.SeriesId || (item.ParentId ? await resolveParentSeries(apiClient, userId, item.ParentId) : null);
-            if (seriesId && !seenIds.has(seriesId)) {
-                try {
-                    const series = await apiClient.getItem(userId, seriesId);
-                    if (series && series.Type === "Series") { seenIds.add(seriesId); result.push(series); }
-                } catch (e) { /* skip */ }
-            }
+        if ((item.Type === "Movie" || item.Type === "Series") && !seenIds.has(item.Id)) {
+            seenIds.add(item.Id);
+            result.push(item);
         }
-        // Other types (BoxSet, etc.) are skipped in the standard path
     }
     return result;
-}
-
-// Recursively walk up the parent chain to find a Series item.
-// Handles Episode → Season → Series and direct Episode → Series.
-async function resolveParentSeries(apiClient, userId, parentId) {
-    try {
-        const parent = await apiClient.getItem(userId, parentId);
-        if (!parent) return null;
-        if (parent.Type === "Series") return parent.Id;
-        if (parent.Type === "Season" || parent.Type === "Episode") {
-            if (parent.SeriesId) return parent.SeriesId;
-            if (parent.ParentId) return resolveParentSeries(apiClient, userId, parent.ParentId);
-        }
-        return null;
-    } catch (e) { return null; }
 }
 
 async function fetchItems(apiClient) {
@@ -500,14 +478,14 @@ async function fetchInitialGroup(apiClient, parentId) {
     // Filter out Episodes/Seasons — show the parent Series instead.
     // IncludeItemTypes:"Movie,Series" should prevent this, but some
     // collections/playlists return episodes as direct children.
-    allItems = await filterAndResolveSeries(apiClient, allItems);
+    allItems = filterAndResolveSeries(apiClient, allItems);
     // If we got fewer items than needed (random start was too high for a
     // small library/collection, or IsPlayed filtered most out), retry from 0.
     // This fixes collections with fewer items than fetchSize.
     if (allItems.length < CONFIG.limit && STATE.totalRecordCount > 0) {
         const q2 = buildQuery(parentId, { limit: fetchSize, startIndex: 0, enableTotal: false });
         const result2 = await apiClient.getItems(apiClient.getCurrentUserId(), q2);
-        allItems = await filterAndResolveSeries(apiClient, result2?.Items || []);
+        allItems = filterAndResolveSeries(apiClient, result2?.Items || []);
     }
     // Secondary fallback: if IsPlayed filter returned 0 items but the
     // collection/library has items, retry without the played filter.
@@ -517,7 +495,7 @@ async function fetchInitialGroup(apiClient, parentId) {
         delete q3.IsPlayed;
         const result3 = await apiClient.getItems(apiClient.getCurrentUserId(), q3);
         if (result3?.TotalRecordCount != null) STATE.totalRecordCount = result3.TotalRecordCount;
-        allItems = await filterAndResolveSeries(apiClient, result3?.Items || []);
+        allItems = filterAndResolveSeries(apiClient, result3?.Items || []);
         if (allItems.length > 0) console.log('[SpotlightTrailer] IsPlayed filter removed — showing all items (collection may be fully watched)');
     }
     console.log(`[SpotlightTrailer] Initial fetch returned ${allItems.length} items`);
@@ -536,7 +514,7 @@ async function fetchBatch(apiClient, parentId) {
         const startIndex = getRandomStartIndex(batchSize);
         const q = buildQuery(parentId, { limit: batchSize, startIndex, enableTotal: false });
         const result = await apiClient.getItems(apiClient.getCurrentUserId(), q);
-        const items = await filterAndResolveSeries(apiClient, result?.Items || []);
+        const items = filterAndResolveSeries(apiClient, result?.Items || []);
         const existingIds = new Set(STATE.itemPool.map(i => i.Id));
         STATE.itemPool.push(...items.filter(i => !existingIds.has(i.Id)));
     } catch (e) { /* ignore */ }
@@ -573,6 +551,19 @@ async function fetchStandardItems(apiClient) {
     STATE.apiClient = apiClient;
     const parentId = CONFIG.collectionId || CONFIG.libraryId || null;
     try {
+        // If the parent is a BoxSet (collection), its children are often
+        // episodes even when IncludeItemTypes:"Movie,Series" is set.
+        // Detect this and set a flag so buildQuery can use the correct
+        // filtering approach.
+        if (parentId) {
+            try {
+                const parent = await apiClient.getItem(apiClient.getCurrentUserId(), parentId);
+                if (parent && (parent.Type === "BoxSet" || parent.Type === "Playlist")) {
+                    STATE.parentIsBoxSet = true;
+                    console.log('[SpotlightTrailer] Parent is ' + parent.Type + ' ("' + parent.Name + '") — using collection query mode');
+                }
+            } catch (e) { /* ignore — proceed with normal query */ }
+        }
         const displayItems = await fetchInitialGroup(apiClient, parentId);
         fetchBatch(apiClient, parentId);
         return displayItems;
