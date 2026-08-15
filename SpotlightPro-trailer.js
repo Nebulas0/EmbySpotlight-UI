@@ -73,10 +73,18 @@ const CONFIG = {
     enableGenreClick: true,
     enableTrailers: true,
     trailerStartMuted: false,
-    // Which library to scope genre button navigation to.
-    // Set to a library ID (e.g. 2310256) to scope genres to that library.
-    // Set to null to show genres across ALL libraries (no ParentId filter).
-    genreLibraryId: null
+    // === Genre button navigation scope ===
+    // Three modes (checked in this order):
+    //   1. genreUseSpotlightParent: true
+    //      → uses collectionId || libraryId (the spotlight's own parent).
+    //        This is the original behavior — genre clicks stay scoped to
+    //        whatever the spotlight is showing.
+    //   2. genreLibraryId: <library ID>
+    //      → scopes genre navigation to that specific library.
+    //   3. genreLibraryId: null (and genreUseSpotlightParent: false)
+    //      → no ParentId filter; genres span ALL libraries.
+    genreLibraryId: null,
+    genreUseSpotlightParent: false
 };
 
 
@@ -568,11 +576,13 @@ async function fetchStandardItems(apiClient) {
 async function navigateToGenre(genre, apiClient) {
     try {
         const sid = getServerId(apiClient);
-        // Genre buttons use genreLibraryId if set, otherwise no ParentId
-        // (shows genres across all libraries). This is independent from the
-        // spotlight's collectionId/libraryId so that genre clicks on a
-        // collection-based spotlight still navigate to a real library.
-        const parentId = CONFIG.genreLibraryId || '';
+        // Genre button scope (see CONFIG comments for the 3 modes):
+        //   1. genreUseSpotlightParent → use the spotlight's own parent
+        //   2. genreLibraryId set      → use that library
+        //   3. genreLibraryId null     → all libraries (no ParentId)
+        const parentId = CONFIG.genreUseSpotlightParent
+            ? (CONFIG.collectionId || CONFIG.libraryId || '')
+            : (CONFIG.genreLibraryId || '');
         const userId = apiClient.getCurrentUserId();
         const token = apiClient.accessToken ? apiClient.accessToken() : null;
 
