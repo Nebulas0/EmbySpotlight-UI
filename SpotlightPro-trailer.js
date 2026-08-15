@@ -1295,9 +1295,9 @@ function attachSliderBehavior(state, apiClient) {
     window.addEventListener("resize", resizeHandler);
     setTimeout(() => { updateTransform(currentIndex, false); setActiveDot(currentIndex); triggerKenBurns(); updateFavoriteButton(); updateSlideCounter(); updateTrailerButtonVisibility(); startProgress(); }, 50);
 
-    btnRight.addEventListener("click", (e) => { e.stopPropagation(); currentIndex++; animate(); });
-    btnLeft.addEventListener("click", (e) => { e.stopPropagation(); currentIndex--; animate(); });
-    controls.addEventListener("click", (e) => { e.stopPropagation(); if (e.target.classList.contains("control")) { resetOverviews(); currentIndex = parseInt(e.target.dataset.index, 10); updateTransform(currentIndex, true); setActiveDot(currentIndex); updateFavoriteButton(); updateSlideCounter(); updateTrailerButtonVisibility(); setTimeout(() => { triggerKenBurns(); startProgress(); }, 100); } });
+    btnRight.addEventListener("click", (e) => { e.stopPropagation(); currentIndex++; animate(); if (autoplayTimer) startAutoplay(); });
+    btnLeft.addEventListener("click", (e) => { e.stopPropagation(); currentIndex--; animate(); if (autoplayTimer) startAutoplay(); });
+    controls.addEventListener("click", (e) => { e.stopPropagation(); if (e.target.classList.contains("control")) { resetOverviews(); currentIndex = parseInt(e.target.dataset.index, 10); updateTransform(currentIndex, true); setActiveDot(currentIndex); updateFavoriteButton(); updateSlideCounter(); updateTrailerButtonVisibility(); setTimeout(() => { triggerKenBurns(); startProgress(); }, 100); if (autoplayTimer) startAutoplay(); } });
 
     function animate() {
         if (trailerActive) stopTrailer();
@@ -1360,7 +1360,7 @@ function attachSliderBehavior(state, apiClient) {
             if (!isSwiping || touchStartX === 0) { touchStartX = 0; touchStartY = 0; isSwiping = false; return; }
             touchEndX = e.changedTouches[0].clientX;
             const sd = touchEndX - touchStartX, st = Date.now() - swipeStartTime, ss = Math.abs(sd) / st;
-            if (Math.abs(sd) > CONFIG.swipeThreshold || ss > 0.5) { if (sd < 0) currentIndex++; else currentIndex--; animate(); }
+            if (Math.abs(sd) > CONFIG.swipeThreshold || ss > 0.5) { if (sd < 0) currentIndex++; else currentIndex--; animate(); if (autoplayTimer) startAutoplay(); }
             touchStartX = 0; touchStartY = 0; touchEndX = 0; touchEndY = 0; isSwiping = false;
         }, { passive: true });
         slider.addEventListener('touchcancel', () => { touchStartX = 0; touchStartY = 0; isSwiping = false; }, { passive: true });
