@@ -502,12 +502,15 @@ async function fetchInitialGroup(apiClient, parentId) {
     const half = Math.floor(CONFIG.limit / 2);
 
     if (CONFIG.balancedMovieSeries) {
-        // FAST INITIAL FETCH: only fetch enough for display (limit*2 per type)
-        // with full metadata. The 250-item pool is fetched in the background
-        // by fetchBatch() with minimal metadata.
-        const initSize = CONFIG.limit * 2; // 20 per type — enough for display + a few swaps
-        const movieQ = buildQuery(parentId, { limit: initSize, startIndex: 0, enableTotal: true, itemType: "Movie" });
-        const seriesQ = buildQuery(parentId, { limit: initSize, startIndex: 0, enableTotal: true, itemType: "Series" });
+        // FAST INITIAL FETCH: fetch limit*2 items per type with full metadata.
+        // Use a random startIndex so each page load shows different items,
+        // not always the same 20 newest. If the random start is too high
+        // (beyond available items), retry from 0.
+        const initSize = CONFIG.limit * 2; // 20 per type
+        const movieStart = Math.floor(Math.random() * 500);
+        const seriesStart = Math.floor(Math.random() * 500);
+        const movieQ = buildQuery(parentId, { limit: initSize, startIndex: movieStart, enableTotal: true, itemType: "Movie" });
+        const seriesQ = buildQuery(parentId, { limit: initSize, startIndex: seriesStart, enableTotal: true, itemType: "Series" });
         const [movieResult, seriesResult] = await Promise.all([
             apiClient.getItems(apiClient.getCurrentUserId(), movieQ),
             apiClient.getItems(apiClient.getCurrentUserId(), seriesQ)
@@ -519,8 +522,19 @@ async function fetchInitialGroup(apiClient, parentId) {
         let movies = filterAndResolveSeries(apiClient, movieResult?.Items || []);
         let series = filterAndResolveSeries(apiClient, seriesResult?.Items || []);
 
-        // If BoxSet detection hasn't completed yet and we got 0 items,
-        // retry with Recursive=true (the parent might be a regular library)
+        // Retry from 0 if random start was too high (got fewer items than needed).
+        // This must happen BEFORE the Recursive/IsPlayed fallbacks.
+        if (movies.length < half) {
+            const rq = buildQuery(parentId, { limit: initSize, startIndex: 0, enableTotal: false, itemType: "Movie" });
+            movies = filterAndResolveSeries(apiClient, (await apiClient.getItems(apiClient.getCurrentUserId(), rq))?.Items || []);
+        }
+        if (series.length < (CONFIG.limit - half)) {
+            const rq = buildQuery(parentId, { limit: initSize, startIndex: 0, enableTotal: false, itemType: "Series" });
+            series = filterAndResolveSeries(apiClient, (await apiClient.getItems(apiClient.getCurrentUserId(), rq))?.Items || []);
+        }
+
+        // If still 0 items for both types, the parent might not be a BoxSet.
+        // Retry with Recursive=true (regular library).
         if (movies.length === 0 && series.length === 0 && parentId) {
             STATE.parentIsBoxSet = false;
             const rq = buildQuery(parentId, { limit: initSize, startIndex: 0, enableTotal: true, itemType: "Movie" });
