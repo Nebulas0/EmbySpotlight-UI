@@ -376,8 +376,12 @@ function insertStyles() {
 
 function buildQuery(parentId, options) {
     options = options || {};
+    // For BoxSet/Playlist parents, Recursive=true returns episodes even with
+    // IncludeItemTypes:"Movie,Series" (Emby bug). Use Recursive=false to get
+    // the direct children (Series/Movies) instead.
     const q = {
-        IncludeItemTypes: STATE.parentIsBoxSet ? "Series,Movie" : "Movie,Series", Recursive: true,
+        IncludeItemTypes: "Movie,Series",
+        Recursive: !STATE.parentIsBoxSet,
         SortBy: "ProductionYear,SortName", SortOrder: "Descending",
         EnableImageTypes: "Primary,Backdrop,Thumb,Logo,Banner",
         EnableUserData: true,
