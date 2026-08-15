@@ -533,20 +533,6 @@ async function fetchInitialGroup(apiClient, parentId) {
             series = filterAndResolveSeries(apiClient, (await apiClient.getItems(apiClient.getCurrentUserId(), rq))?.Items || []);
         }
 
-        // If still 0 items for both types, the parent might not be a BoxSet.
-        // Retry with Recursive=true (regular library).
-        if (movies.length === 0 && series.length === 0 && parentId) {
-            STATE.parentIsBoxSet = false;
-            const rq = buildQuery(parentId, { limit: initSize, startIndex: 0, enableTotal: true, itemType: "Movie" });
-            const sq = buildQuery(parentId, { limit: initSize, startIndex: 0, enableTotal: true, itemType: "Series" });
-            const [rr, sr] = await Promise.all([
-                apiClient.getItems(apiClient.getCurrentUserId(), rq),
-                apiClient.getItems(apiClient.getCurrentUserId(), sq)
-            ]);
-            movies = filterAndResolveSeries(apiClient, rr?.Items || []);
-            series = filterAndResolveSeries(apiClient, sr?.Items || []);
-        }
-
         // IsPlayed fallback per type
         if (CONFIG.unplayedOnly) {
             if (movies.length === 0) {
@@ -682,22 +668,24 @@ async function fetchStandardItems(apiClient) {
     STATE.apiClient = apiClient;
     const parentId = CONFIG.collectionId || CONFIG.libraryId || null;
     try {
-        // Detect BoxSet/Playlist parent in parallel with the initial fetch.
-        // Default to Recursive=false (works for BoxSets). If the parent is
-        // NOT a BoxSet, fetchInitialGroup will retry with Recursive=true.
+        // Detect parent type FIRST. This is a fast single-item query (~0.1s)
+        // and determines whether to use Recursive=true or false:
+        //   - BoxSet/Playlist → Recursive=false (direct children are movies/series)
+        //   - CollectionFolder/Library → Recursive=true (movies are in subfolders)
         if (parentId) {
-            apiClient.getItem(apiClient.getCurrentUserId(), parentId)
-                .then(parent => {
-                    if (parent && (parent.Type === "BoxSet" || parent.Type === "Playlist")) {
-                        STATE.parentIsBoxSet = true;
-                        console.log('[SpotlightTrailer] Parent is ' + parent.Type + ' ("' + parent.Name + '")');
-                    } else {
-                        STATE.parentIsBoxSet = false;
-                    }
-                })
-                .catch(() => { STATE.parentIsBoxSet = false; });
-            // Assume BoxSet initially — if wrong, fetchInitialGroup retries
-            STATE.parentIsBoxSet = true;
+            try {
+                const parent = await apiClient.getItem(apiClient.getCurrentUserId(), parentId);
+                if (parent && (parent.Type === "BoxSet" || parent.Type === "Playlist")) {
+                    STATE.parentIsBoxSet = true;
+                    console.log('[SpotlightTrailer] Parent is ' + parent.Type + ' ("' + parent.Name + '") — Recursive=false');
+                } else {
+                    STATE.parentIsBoxSet = false;
+                    console.log('[SpotlightTrailer] Parent is ' + parent.Type + ' ("' + parent.Name + '") — Recursive=true');
+                }
+            } catch (e) {
+                STATE.parentIsBoxSet = false;
+                console.log('[SpotlightTrailer] Could not detect parent type — defaulting to Recursive=true');
+            }
         }
         const displayItems = await fetchInitialGroup(apiClient, parentId);
         fetchBatch(apiClient, parentId);
