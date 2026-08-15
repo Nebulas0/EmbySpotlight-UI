@@ -391,7 +391,7 @@ function buildQuery(parentId, options) {
     // IncludeItemTypes:"Movie,Series" (Emby bug). Use Recursive=false to get
     // the direct children (Series/Movies) instead.
     const q = {
-        IncludeItemTypes: "Movie,Series",
+        IncludeItemTypes: options.itemType || "Movie,Series",
         Recursive: !STATE.parentIsBoxSet,
         SortBy: "ProductionYear,SortName", SortOrder: "Descending",
         EnableImageTypes: "Primary,Backdrop,Thumb,Logo,Banner",
@@ -494,35 +494,78 @@ function getRandomStartIndex(batchSize) {
 
 async function fetchInitialGroup(apiClient, parentId) {
     const fetchSize = CONFIG.limit * 2;
-    // SINGLE query: get items + total count in one round-trip.
-    // Use a random startIndex for variety. We don't know the total yet,
-    // but a large random start works fine — Emby clamps to available items.
-    // For small libraries, startIndex=0 is used (no random needed).
-    // Use a random start within a reasonable range (0-5000) to avoid
-    // always showing the same newest items.
     const estimatedStart = Math.floor(Math.random() * 500);
+
+    // When balancedMovieSeries is enabled, fetch movies and series
+    // separately so we get a true 50/50 split even when one type
+    // vastly outnumbers the other (e.g. 9 movies + 417 series).
+    if (CONFIG.balancedMovieSeries) {
+        const half = Math.floor(CONFIG.limit / 2);
+        const movieQ = buildQuery(parentId, { limit: half * 2, startIndex: Math.floor(Math.random() * 200), enableTotal: true, itemType: "Movie" });
+        const seriesQ = buildQuery(parentId, { limit: (CONFIG.limit - half) * 2, startIndex: Math.floor(Math.random() * 200), enableTotal: false, itemType: "Series" });
+        const [movieResult, seriesResult] = await Promise.all([
+            apiClient.getItems(apiClient.getCurrentUserId(), movieQ),
+            apiClient.getItems(apiClient.getCurrentUserId(), seriesQ)
+        ]);
+        if (movieResult?.TotalRecordCount != null || seriesResult?.TotalRecordCount != null) {
+            STATE.totalRecordCount = (movieResult?.TotalRecordCount || 0) + (seriesResult?.TotalRecordCount || 0);
+            console.log(`[SpotlightTrailer] Total: ${STATE.totalRecordCount} (${movieResult?.TotalRecordCount || 0} movies, ${seriesResult?.TotalRecordCount || 0} series)`);
+        }
+        let movies = filterAndResolveSeries(apiClient, movieResult?.Items || []);
+        let series = filterAndResolveSeries(apiClient, seriesResult?.Items || []);
+        // Retry from 0 if random start was too high
+        if (movies.length < half && (movieResult?.TotalRecordCount || 0) > 0) {
+            const rq = buildQuery(parentId, { limit: half * 2, startIndex: 0, enableTotal: false, itemType: "Movie" });
+            movies = filterAndResolveSeries(apiClient, (await apiClient.getItems(apiClient.getCurrentUserId(), rq))?.Items || []);
+        }
+        if (series.length < (CONFIG.limit - half) && (seriesResult?.TotalRecordCount || 0) > 0) {
+            const rq = buildQuery(parentId, { limit: (CONFIG.limit - half) * 2, startIndex: 0, enableTotal: false, itemType: "Series" });
+            series = filterAndResolveSeries(apiClient, (await apiClient.getItems(apiClient.getCurrentUserId(), rq))?.Items || []);
+        }
+        // IsPlayed fallback for both types
+        if (movies.length === 0 && series.length === 0 && CONFIG.unplayedOnly) {
+            console.log('[SpotlightTrailer] No unplayed items — retrying without IsPlayed filter');
+            const mq = buildQuery(parentId, { limit: half * 2, startIndex: 0, enableTotal: false, itemType: "Movie" });
+            delete mq.IsPlayed;
+            const sq = buildQuery(parentId, { limit: (CONFIG.limit - half) * 2, startIndex: 0, enableTotal: false, itemType: "Series" });
+            delete sq.IsPlayed;
+            const [mr, sr] = await Promise.all([
+                apiClient.getItems(apiClient.getCurrentUserId(), mq),
+                apiClient.getItems(apiClient.getCurrentUserId(), sq)
+            ]);
+            movies = filterAndResolveSeries(apiClient, mr?.Items || []);
+            series = filterAndResolveSeries(apiClient, sr?.Items || []);
+        }
+        // Pick half from each, fill up from the other if one is short
+        const moviePick = shuffleArray(movies).slice(0, half);
+        const seriesPick = shuffleArray(series).slice(0, CONFIG.limit - half);
+        let display = [...moviePick, ...seriesPick];
+        // If we don't have enough, fill from whichever has more
+        if (display.length < CONFIG.limit) {
+            const extra = shuffleArray([...movies.slice(half), ...series.slice(CONFIG.limit - half)]);
+            display = [...display, ...extra].slice(0, CONFIG.limit);
+        }
+        display = shuffleArray(display);
+        // Push remaining into pool for batch swaps
+        STATE.itemPool.push(...movies.slice(half), ...series.slice(CONFIG.limit - half));
+        STATE.poolCursor = 0;
+        console.log(`[SpotlightTrailer] Balanced fetch: ${moviePick.length} movies + ${seriesPick.length} series = ${display.length} items`);
+        return display;
+    }
+
+    // Non-balanced mode: single query as before
     const q = buildQuery(parentId, { limit: fetchSize, startIndex: estimatedStart, enableTotal: true });
     const result = await apiClient.getItems(apiClient.getCurrentUserId(), q);
     if (result?.TotalRecordCount != null) {
         STATE.totalRecordCount = result.TotalRecordCount;
         console.log(`[SpotlightTrailer] Total unplayed items: ${STATE.totalRecordCount}`);
     }
-    let allItems = (result?.Items || []);
-    // Filter out Episodes/Seasons — show the parent Series instead.
-    // IncludeItemTypes:"Movie,Series" should prevent this, but some
-    // collections/playlists return episodes as direct children.
-    allItems = filterAndResolveSeries(apiClient, allItems);
-    // If we got fewer items than needed (random start was too high for a
-    // small library/collection, or IsPlayed filtered most out), retry from 0.
-    // This fixes collections with fewer items than fetchSize.
+    let allItems = filterAndResolveSeries(apiClient, result?.Items || []);
     if (allItems.length < CONFIG.limit && STATE.totalRecordCount > 0) {
         const q2 = buildQuery(parentId, { limit: fetchSize, startIndex: 0, enableTotal: false });
         const result2 = await apiClient.getItems(apiClient.getCurrentUserId(), q2);
         allItems = filterAndResolveSeries(apiClient, result2?.Items || []);
     }
-    // Secondary fallback: if IsPlayed filter returned 0 items but the
-    // collection/library has items, retry without the played filter.
-    // (Curated collections may have all-watched items; still worth showing.)
     if (allItems.length === 0 && CONFIG.unplayedOnly) {
         const q3 = buildQuery(parentId, { limit: fetchSize, startIndex: 0, enableTotal: true });
         delete q3.IsPlayed;
@@ -532,11 +575,11 @@ async function fetchInitialGroup(apiClient, parentId) {
         if (allItems.length > 0) console.log('[SpotlightTrailer] IsPlayed filter removed — showing all items (collection may be fully watched)');
     }
     console.log(`[SpotlightTrailer] Initial fetch returned ${allItems.length} items`);
-    if (allItems.length <= CONFIG.limit) return balancedSplit(allItems);
-    const display = balancedSplit(allItems.slice(0, CONFIG.limit * 2));
-    STATE.itemPool.push(...allItems.slice(CONFIG.limit * 2));
+    if (allItems.length <= CONFIG.limit) return shuffleArray(allItems);
+    const display = shuffleArray(allItems.slice(0, CONFIG.limit));
+    STATE.itemPool.push(...allItems.slice(CONFIG.limit));
     STATE.poolCursor = 0;
-    return display.slice(0, CONFIG.limit);
+    return display;
 }
 
 async function fetchBatch(apiClient, parentId) {
@@ -563,7 +606,19 @@ function getNextGroupFromPool() {
     // Shuffle the remaining pool so each batch is different
     const available = STATE.itemPool.slice(STATE.poolCursor);
     const shuffled = shuffleArray(available);
-    const group = balancedSplit(shuffled.slice(0, CONFIG.limit * 2)).slice(0, CONFIG.limit);
+    let group;
+    if (CONFIG.balancedMovieSeries) {
+        const half = Math.floor(CONFIG.limit / 2);
+        const movies = shuffled.filter(i => i.Type === "Movie").slice(0, half);
+        const series = shuffled.filter(i => i.Type === "Series").slice(0, CONFIG.limit - half);
+        group = shuffleArray([...movies, ...series]).slice(0, CONFIG.limit);
+        // If not enough of one type, fill from the other
+        if (group.length < CONFIG.limit) {
+            group = shuffleArray(shuffled.slice(0, CONFIG.limit));
+        }
+    } else {
+        group = shuffled.slice(0, CONFIG.limit);
+    }
     // Remove the selected items from the pool
     const groupIds = new Set(group.map(i => i.Id));
     STATE.itemPool = STATE.itemPool.filter(i => !groupIds.has(i.Id) || STATE.itemPool.indexOf(i) < STATE.poolCursor);
