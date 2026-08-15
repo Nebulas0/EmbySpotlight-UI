@@ -83,7 +83,18 @@ const CONFIG = {
     //   3. genreLibraryId: null (and genreUseSpotlightParent: false)
     //      → no ParentId filter; genres span ALL libraries.
     genreLibraryId: null,
-    genreUseSpotlightParent: false
+    genreUseSpotlightParent: false,
+    // === 4K content exclusion ===
+    // Set to true to exclude items whose path contains "/4k/" or "2160p".
+    // Works by filtering client-side since Emby API doesn't support
+    // path-based exclusion for BoxSet children.
+    exclude4K: false,
+    // === Movie/Series split ===
+    // When true and the collection contains both Movies and Series,
+    // the spotlight will show half movies and half series (e.g. 5+5
+    // when limit=10). When false, items are mixed randomly regardless
+    // of type.
+    balancedMovieSeries: true
 };
 
 
@@ -386,7 +397,7 @@ function buildQuery(parentId, options) {
         EnableImageTypes: "Primary,Backdrop,Thumb,Logo,Banner",
         EnableUserData: true,
         EnableTotalRecordCount: options.enableTotal !== false,
-        Fields: "PrimaryImageAspectRatio,BackdropImageTags,ImageTags,ParentLogoImageTag,ParentLogoItemId,CriticRating,CommunityRating,OfficialRating,PremiereDate,ProductionYear,Genres,RunTimeTicks,Taglines,Overview,RemoteTrailers"
+        Fields: "PrimaryImageAspectRatio,BackdropImageTags,ImageTags,ParentLogoImageTag,ParentLogoItemId,CriticRating,CommunityRating,OfficialRating,PremiereDate,ProductionYear,Genres,RunTimeTicks,Taglines,Overview,RemoteTrailers,Path"
     };
     if (CONFIG.unplayedOnly) q.IsPlayed = false;
     q.Limit = options.limit != null ? options.limit : CONFIG.limit;
@@ -432,21 +443,39 @@ async function toggleFavorite(itemId, apiClient, isFavorite) {
 }
 
 // Fast filter: keep only Movie/Series items, drop everything else.
-// No API calls — episodes/seasons are simply skipped (the query should
-// already filter them, but some BoxSet/collection parents return episodes
-// regardless of IncludeItemTypes). Duplicates are removed.
+// Also optionally excludes 4K content by checking the item's path.
+// No API calls — everything is done client-side. Duplicates are removed.
 function filterAndResolveSeries(apiClient, items) {
     if (!items || items.length === 0) return items;
     const result = [];
     const seenIds = new Set();
     for (const item of items) {
         if (!item) continue;
-        if ((item.Type === "Movie" || item.Type === "Series") && !seenIds.has(item.Id)) {
-            seenIds.add(item.Id);
-            result.push(item);
+        if (item.Type !== "Movie" && item.Type !== "Series") continue;
+        if (seenIds.has(item.Id)) continue;
+        // 4K exclusion: check path for /4k/ or 2160p
+        if (CONFIG.exclude4K) {
+            const path = (item.Path || '').toLowerCase();
+            if (path.includes('/4k/') || path.includes('2160p')) continue;
         }
+        seenIds.add(item.Id);
+        result.push(item);
     }
     return result;
+}
+
+// Split items into balanced movie/series groups.
+// Returns half movies and half series (shuffled), or all items if
+// balancedMovieSeries is disabled or one type is missing.
+function balancedSplit(items) {
+    if (!CONFIG.balancedMovieSeries || !items || items.length === 0) return items;
+    const movies = shuffleArray(items.filter(i => i.Type === "Movie"));
+    const series = shuffleArray(items.filter(i => i.Type === "Series"));
+    if (movies.length === 0 || series.length === 0) return shuffleArray(items);
+    const half = Math.floor(CONFIG.limit / 2);
+    const movieHalf = movies.slice(0, half);
+    const seriesHalf = series.slice(0, CONFIG.limit - half);
+    return shuffleArray([...movieHalf, ...seriesHalf]);
 }
 
 async function fetchItems(apiClient) {
@@ -503,11 +532,11 @@ async function fetchInitialGroup(apiClient, parentId) {
         if (allItems.length > 0) console.log('[SpotlightTrailer] IsPlayed filter removed — showing all items (collection may be fully watched)');
     }
     console.log(`[SpotlightTrailer] Initial fetch returned ${allItems.length} items`);
-    if (allItems.length <= CONFIG.limit) return allItems;
-    const display = allItems.slice(0, CONFIG.limit);
-    STATE.itemPool.push(...allItems.slice(CONFIG.limit));
+    if (allItems.length <= CONFIG.limit) return balancedSplit(allItems);
+    const display = balancedSplit(allItems.slice(0, CONFIG.limit * 2));
+    STATE.itemPool.push(...allItems.slice(CONFIG.limit * 2));
     STATE.poolCursor = 0;
-    return display;
+    return display.slice(0, CONFIG.limit);
 }
 
 async function fetchBatch(apiClient, parentId) {
@@ -534,7 +563,7 @@ function getNextGroupFromPool() {
     // Shuffle the remaining pool so each batch is different
     const available = STATE.itemPool.slice(STATE.poolCursor);
     const shuffled = shuffleArray(available);
-    const group = shuffled.slice(0, CONFIG.limit);
+    const group = balancedSplit(shuffled.slice(0, CONFIG.limit * 2)).slice(0, CONFIG.limit);
     // Remove the selected items from the pool
     const groupIds = new Set(group.map(i => i.Id));
     STATE.itemPool = STATE.itemPool.filter(i => !groupIds.has(i.Id) || STATE.itemPool.indexOf(i) < STATE.poolCursor);
